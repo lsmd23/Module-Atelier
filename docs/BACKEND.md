@@ -9,10 +9,47 @@ PostgreSQL, domain services that own revision semantics. Delivered by BE-001.
 | --- | --- | --- |
 | Node.js | 24.x | The API runs TypeScript directly, no build step (`node src/main.ts`) |
 | pnpm | 10.15.0 | Pinned by `packageManager`; enable with `corepack enable` |
-| PostgreSQL | 16+ | Local conda instance on port 5433 (`~/.module-atelier/pgctl`) |
+| PostgreSQL | 16+ | Local conda instance on port 5433 (`~/.module-atelier/pgctl`), or the Compose service below |
 
 The machine's toolchain lives in the conda environment `module-atelier`
-(see `~/.module-atelier/README.md`). Docker is not required and is not used.
+(see `~/.module-atelier/README.md`). Docker is optional for local development
+and is the supported single-host deployment path below.
+
+## Docker Compose deployment
+
+The backend deployment contains only the M0 services that exist today: a
+PostgreSQL 16 database, a one-shot migration service, and the Fastify API.
+PostgreSQL is on an internal Compose network and is not published to the host.
+The API is bound to `127.0.0.1:3000` by default so a reverse proxy can own the
+public ports.
+
+```bash
+cp infra/backend.env.example infra/backend.env
+# edit infra/backend.env and replace POSTGRES_PASSWORD
+pnpm docker:backend:config   # validate interpolation before starting
+pnpm docker:backend:up
+curl http://127.0.0.1:3000/api/health
+pnpm docker:backend:logs
+pnpm docker:backend:down     # keeps the named PostgreSQL volume
+```
+
+`migrate` waits for PostgreSQL readiness and must complete successfully before
+the API starts. Re-running `docker:backend:up` is safe: Drizzle records applied
+migrations in `drizzle.__drizzle_migrations`. To remove the database volume in a
+disposable local environment, use `docker compose --env-file infra/backend.env
+-f infra/docker-compose.yml down -v`; do not use `-v` for a deployment you need
+to preserve.
+
+The image runs as the unprivileged `node` user, has a read-only root filesystem,
+prevents gaining new privileges, and receives a Docker healthcheck based on
+`/api/health`. The healthcheck is dependency-aware and returns failure when
+PostgreSQL is unavailable. No database port is exposed by Compose.
+
+The example password is intentionally not production-safe. Use a secret
+manager or an equivalent deployment secret mechanism in production, and keep
+the password URL-safe because the current M0 connection string is assembled by
+Compose. Authentication, Caddy/HTTPS, backups, and worker containers are not
+implemented in M0 and remain release blockers for a public production launch.
 
 ## First run
 

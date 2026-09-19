@@ -1,0 +1,56 @@
+import type { FastifyInstance } from "fastify";
+import {
+  apiRoutes,
+  createDocumentRequestSchema,
+  documentParamsSchema,
+  pageQuerySchema,
+  projectParamsSchema,
+  updateDocumentRequestSchema
+} from "@module-atelier/contracts";
+import { pageRequest, parseInput } from "../http.ts";
+import type { ApiServices } from "../types.ts";
+
+export function registerDocumentRoutes(app: FastifyInstance, services: ApiServices): void {
+  app.get(apiRoutes.projectDocuments, async (request) => {
+    const params = parseInput(projectParamsSchema, request.params);
+    const query = parseInput(pageQuerySchema, request.query);
+    return { data: await services.documents.list(params.projectId, pageRequest(query)) };
+  });
+
+  app.post(apiRoutes.projectDocuments, async (request, reply) => {
+    const params = parseInput(projectParamsSchema, request.params);
+    const body = parseInput(createDocumentRequestSchema, request.body);
+    const document = await services.documents.create(params.projectId, {
+      title: body.title,
+      content: body.content ?? ""
+    });
+    reply.code(201);
+    return { data: document };
+  });
+
+  app.get(apiRoutes.document, async (request) => {
+    const params = parseInput(documentParamsSchema, request.params);
+    return { data: await services.documents.get(params.documentId) };
+  });
+
+  /**
+   * `baseRevision` is mandatory: a stale write is rejected with 409 CONFLICT
+   * instead of overwriting newer content.
+   */
+  app.patch(apiRoutes.document, async (request) => {
+    const params = parseInput(documentParamsSchema, request.params);
+    const body = parseInput(updateDocumentRequestSchema, request.body);
+    const document = await services.documents.update(params.documentId, {
+      baseRevision: body.baseRevision,
+      ...(body.title === undefined ? {} : { title: body.title }),
+      ...(body.content === undefined ? {} : { content: body.content })
+    });
+    return { data: document };
+  });
+
+  app.get(apiRoutes.documentRevisions, async (request) => {
+    const params = parseInput(documentParamsSchema, request.params);
+    const query = parseInput(pageQuerySchema, request.query);
+    return { data: await services.documents.listRevisions(params.documentId, pageRequest(query)) };
+  });
+}

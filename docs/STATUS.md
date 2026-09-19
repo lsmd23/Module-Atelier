@@ -14,6 +14,9 @@ In Progress:
 Blocked:
 - None known. Route-level API contracts remain to be proposed by backend and reviewed before frontend implementation.
 
+Global conventions:
+- Repository-wide rules are in `AGENTS.md`; module-specific contracts remain in `docs/CONTRACTS.md` and `docs/INTEGRATION.md`.
+
 Important Contract Changes:
 - Initial contract v0.1.0 introduced. No API routes frozen yet.
 

@@ -37,4 +37,16 @@ describe("publishing spike", () => {
     expect(html).toContain("&lt;img");
     expect(html).not.toContain("<img src=x");
   });
+
+  it("resolves controlled image assets and diagnoses missing/unsafe resources", () => {
+    const content = "# 图像\n\n![旧地图](asset:map-01 \"钟楼周边\")\n\n:::image asset=\"map-01\" layout=\"full\" caption=\"全宽地图\"\n:::\n\n![缺失](asset:not-found)";
+    const ir = parsePublishSnapshot({ ...snapshot, documents: [{ id: "chapter-01", title: "雾钟镇", content }], assets: [{ id: "map-01", mimeType: "image/svg+xml", width: 10, height: 10, safeLocation: "data:image/svg+xml;base64,PHN2Zy8+" }] });
+    const html = renderHtml(ir);
+    expect(html).toContain("data-asset-id=\"map-01\"");
+    expect(html).toContain("image-full");
+    expect(ir.diagnostics.some((diagnostic) => diagnostic.code === "MISSING_ASSET")).toBe(true);
+
+    const unsafe = parsePublishSnapshot({ ...snapshot, documents: [{ id: "chapter-01", title: "雾钟镇", content: "![危险](asset:unsafe)" }], assets: [{ id: "unsafe", mimeType: "image/png", width: 1, height: 1, safeLocation: "file:///etc/passwd" }] });
+    expect(unsafe.diagnostics[0]?.code).toBe("UNSAFE_ASSET");
+  });
 });

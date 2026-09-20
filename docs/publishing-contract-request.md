@@ -36,7 +36,7 @@ EXAMPLE PAYLOAD:
   "project": { "id": "fogbell", "title": "雾钟镇", "subtitle": "Fogbell Hamlet", "language": "zh-CN" },
   "documents": [{ "id": "chapter-01", "revision": 3, "title": "雾钟镇", "order": 1, "content": "# 第一章 | The First Bell\n..." }],
   "entities": [{ "id": "watcher-01", "type": "monster", "displayName": "雾钟守望者", "resolvedData": { "armorClass": 15 } }],
-  "assets": [],
+  "assets": [{ "id": "fogbell-map", "mimeType": "image/svg+xml", "width": 1200, "height": 720, "safeLocation": "asset://fogbell-map", "caption": "雾钟镇旧地图" }],
   "theme": { "id": "classic-fantasy", "version": "1" }
 }
 ```

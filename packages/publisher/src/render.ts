@@ -25,6 +25,11 @@ function renderCallout(node: CalloutNode): string {
   return `<aside class="callout callout-${node.kind}" data-node-id="${escapeHtml(node.id)}"><h3>${inline(node.title)}</h3>${body}</aside>`;
 }
 
+function renderImage(node: Extract<ModuleNode, { nodeType: "image" }>): string {
+  const safeSrc = node.src.startsWith("data:image/") || node.src.startsWith("asset://") ? node.src : "";
+  return `<figure class="image image-${node.layout}" data-asset-id="${escapeHtml(node.assetId)}"><img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(node.alt)}">${node.caption ? `<figcaption>${inline(node.caption)}</figcaption>` : ""}</figure>`;
+}
+
 function renderSection(node: SectionNode): string {
   return `<section class="module-section level-${node.level}" data-node-id="${escapeHtml(node.id)}"><h2>${node.number ? `<span class="section-number">${escapeHtml(node.number)}</span> ` : ""}${inline(node.title)}${node.subtitle ? ` <span class="subtitle">${inline(node.subtitle)}</span>` : ""}</h2>${node.children.map(renderNode).join("")}</section>`;
 }
@@ -43,7 +48,7 @@ function renderNode(node: ModuleNode): string {
     case "horizontalRule": return "<hr>";
     case "columns": return `<div class="nested-columns" style="column-count:${node.count}">${node.children.map(renderNode).join("")}</div>`;
     case "document": return node.children.map(renderNode).join("");
-    case "image": return `<figure><img src="${escapeHtml(node.src)}" alt="${escapeHtml(node.alt)}"><figcaption>${node.caption ? inline(node.caption) : ""}</figcaption></figure>`;
+    case "image": return renderImage(node);
     case "entityReference": return `<span class="entity-reference">${inline(node.displayName ?? node.reference)}</span>`;
   }
 }
@@ -103,7 +108,7 @@ blockquote { margin: 3mm 0; padding-left: 4mm; border-left: 2px solid #7a1e18; f
 .module-table th { background: #7a1e18; color: white; font-weight: 600; text-align: left; }
 .module-table th, .module-table td { padding: 1.8mm 2mm; border: 1px solid #c9c3bd; vertical-align: top; }
 .module-table tr:nth-child(even) td { background: #f5f3f1; }
-figure { margin: 4mm 0; } figure img { display: block; width: 100%; max-height: 80mm; object-fit: contain; } figcaption { color: #6b625c; text-align: center; font-size: 8pt; }
+figure { margin: 4mm 0; } figure img { display: block; width: 100%; max-height: 80mm; object-fit: contain; } figure.image-full { column-span: all; margin: 5mm 0; } figure.image-full img { max-height: 105mm; } figure.image-column { width: 100%; } figcaption { color: #6b625c; text-align: center; font-size: 8pt; margin-top: 1.5mm; }
 .entity-reference { color: #7a1e18; font-weight: 600; }
 .page-break { column-span: all; break-before: page; height: 0; }
 .nested-columns { column-gap: 9mm; }

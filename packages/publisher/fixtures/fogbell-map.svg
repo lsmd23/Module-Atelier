@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Fogbell Hamlet original location sketch</title>
+  <desc id="desc">An original, non-branded fantasy location sketch with a river, bell tower, road, woods, and three numbered sites.</desc>
+  <rect width="1200" height="720" fill="#e6dcc4"/>
+  <path d="M0 110 C190 60 250 190 390 150 S630 90 770 145 1010 220 1200 120" fill="none" stroke="#8e8067" stroke-width="7" opacity=".7"/>
+  <path d="M45 650 C210 580 190 475 320 420 S500 300 585 365 760 540 840 475 1010 335 1180 390" fill="none" stroke="#6e9da0" stroke-width="34" opacity=".85"/>
+  <path d="M55 646 C215 576 195 474 326 417 S502 302 585 362 758 535 840 471 1015 332 1180 388" fill="none" stroke="#c9e1d9" stroke-width="15" opacity=".9"/>
+  <g fill="#7e9168" opacity=".8">
+    <path d="M35 180 l85 -55 110 18 55 90 -42 110 -130 18 -82 -54z"/>
+    <path d="M830 80 l130 -35 160 85 34 120 -104 66 -140 -27 -74 -92z"/>
+    <path d="M760 550 l120 -75 160 38 70 106 -91 76 -190 -5z"/>
+  </g>
+  <g fill="#d7b37a" stroke="#604c3b" stroke-width="5">
+    <path d="M535 264 l62 -30 62 30 v66 h-124z"/>
+    <path d="M540 264 l57 -56 57 56z"/>
+    <path d="M300 360 l68 -28 52 28 v56 h-120z"/>
+    <path d="M910 280 l70 -35 60 35 v60 h-130z"/>
+  </g>
+  <g fill="none" stroke="#604c3b" stroke-width="9" stroke-linecap="round" opacity=".85">
+    <path d="M350 400 L540 305"/><path d="M660 300 L910 300"/><path d="M368 420 L560 560"/>
+  </g>
+  <g fill="#f7efe0" stroke="#604c3b" stroke-width="4">
+    <circle cx="595" cy="235" r="24"/><circle cx="360" cy="345" r="24"/><circle cx="967" cy="264" r="24"/>
+  </g>
+  <g fill="#604c3b" font-family="Georgia, serif" font-size="22" text-anchor="middle">
+    <text x="595" y="243">1</text><text x="360" y="353">2</text><text x="967" y="272">3</text>
+    <text x="595" y="190" font-size="26">BELL TOWER</text>
+    <text x="360" y="470" font-size="22">FOG ROAD</text>
+    <text x="967" y="390" font-size="22">SOUTH GATE</text>
+  </g>
+  <g fill="#604c3b" font-family="Georgia, serif" font-size="24">
+    <text x="72" y="70">FOGBELL HAMLET · LOCATION SKETCH</text>
+    <text x="1080" y="660" font-size="30">N</text>
+    <path d="M1092 675 l-12 -28 12 -28 12 28z" fill="#604c3b"/>
+  </g>
+  <rect x="18" y="18" width="1164" height="684" fill="none" stroke="#604c3b" stroke-width="5" opacity=".75"/>
+</svg>

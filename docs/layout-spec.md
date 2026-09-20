@@ -47,6 +47,17 @@
 - `Table`：重复表头、单元格可换行；超过三列时产生宽度风险 warning。
 - `Image`：只接受受控 asset resolver 的安全位置；本 spike fixture 不依赖外部图片。
 
+## 图片资源与布局
+
+参考 PDF 中可见 7 个图片资源引用，主要是地图/场景图，通常位于正文页上方，宽度约 495 pt（接近正文双栏总宽），图片下方再恢复双栏正文。该关系被提炼为布局规则，而不是复制任何图像内容。
+
+- Markdown 图片只接受 `asset:<assetId>`，不接受任意网络 URL、`file:` 路径或用户绝对路径。
+- 受控 `PublishAsset` 至少提供 `id`、MIME、宽高和 `safeLocation`；当前 spike 只接受 `data:image/*;base64,...` 或未来由 Worker 拦截处理的 `asset://...`。
+- 支持 `:::image asset="..." layout="full|block|column" alt="..." caption="..."` directive；普通 `![alt](asset:id "caption")` 默认使用 block layout。
+- `full` 图片使用 `column-span: all`，适合参考样例中的地图/场景图；`block` 和 `column` 保持当前栏宽。
+- 图片必须有安全的 alt/caption 文本；缺失资源产生 `MISSING_ASSET`，不安全位置产生 `UNSAFE_ASSET`。
+- 图片加载属于 renderer 前的受控资源解析阶段；Publisher 不直接读取数据库或拼接用户控制的文件路径。
+
 ## 分栏与分页规则
 
 - 正文默认两栏；浏览器 Preview 与 PDF 共享同一 HTML/CSS renderer。

@@ -7,7 +7,8 @@ import type { PublishSnapshot } from "../src/ir.js";
 
 const root = resolve(import.meta.dirname, "../../..");
 const markdown = await readFile(resolve(root, "packages/publisher/fixtures/fogbell.md"), "utf8");
-const snapshot: PublishSnapshot = { schemaVersion: "publish-snapshot@0.1", project: { title: "雾钟镇", subtitle: "Fogbell Hamlet", author: "Module Atelier", language: "zh-CN", theme: "classic-fantasy@1" }, documents: [{ id: "fogbell-chapter", title: "雾钟镇", content: markdown }] };
+const mapSvg = await readFile(resolve(root, "packages/publisher/fixtures/fogbell-map.svg"), "utf8");
+const snapshot: PublishSnapshot = { schemaVersion: "publish-snapshot@0.1", project: { title: "雾钟镇", subtitle: "Fogbell Hamlet", author: "Module Atelier", language: "zh-CN", theme: "classic-fantasy@1" }, documents: [{ id: "fogbell-chapter", title: "雾钟镇", content: markdown }], assets: [{ id: "fogbell-map", mimeType: "image/svg+xml", width: 1200, height: 720, safeLocation: `data:image/svg+xml;base64,${Buffer.from(mapSvg).toString("base64")}`, caption: "雾钟镇旧地图 · Fogbell Hamlet" }] };
 const ir = parsePublishSnapshot(snapshot);
 const fontRoot = resolve(import.meta.dirname, "../node_modules/@fontsource/noto-serif-sc/files");
 const font400 = (await readFile(resolve(fontRoot, "noto-serif-sc-chinese-simplified-400-normal.woff2"))).toString("base64");

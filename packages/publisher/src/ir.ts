@@ -14,6 +14,7 @@ export interface Diagnostic {
     | "UNSUPPORTED_NODE"
     | "MISSING_ENTITY"
     | "MISSING_ASSET"
+    | "UNSAFE_ASSET"
     | "TABLE_TOO_WIDE"
     | "FONT_MISSING"
     | "PAGINATION_TIMEOUT"
@@ -105,6 +106,7 @@ export interface ImageNode extends BaseNode {
   nodeType: "image";
   assetId: string;
   alt: string;
+  layout: "block" | "full" | "column";
   caption?: string;
   src: string;
 }
@@ -160,11 +162,21 @@ export interface ModuleDocumentInput {
   content: string;
 }
 
+export interface PublishAsset {
+  id: string;
+  mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/svg+xml";
+  width: number;
+  height: number;
+  safeLocation: string;
+  caption?: string;
+}
+
 export interface PublishSnapshot {
   schemaVersion: "publish-snapshot@0.1";
   project: ProjectMetadata;
   documents: ModuleDocumentInput[];
   entities?: Array<{ id: string; type: string; name: string; structuredData: Record<string, unknown> }>;
+  assets?: PublishAsset[];
 }
 
 export interface ModuleIR {

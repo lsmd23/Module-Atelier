@@ -11,6 +11,31 @@ pnpm test       # Vitest 单元测试
 pnpm build      # 类型检查 + 产物构建
 ```
 
+## Docker deployment
+
+The production-shaped frontend image builds the Vite bundle once and serves it
+with Caddy. Caddy provides SPA fallback for client-side routes and proxies
+`/api/*` to the backend over the shared Compose network, so browser requests
+remain same-origin and no wildcard CORS policy is needed.
+
+Start the backend stack first (it creates `module-atelier_backend`), then run:
+
+```bash
+cp apps/web/frontend.env.example apps/web/frontend.env
+pnpm docker:frontend:config
+pnpm docker:frontend:up
+curl http://127.0.0.1:8080/
+curl http://127.0.0.1:8080/api/health
+pnpm docker:frontend:logs
+pnpm docker:frontend:down
+```
+
+The web container is read-only, runs with a temporary Caddy data/config
+filesystem, and binds to localhost by default. Put TLS and public ingress in a
+trusted reverse proxy before exposing it outside the host. `VITE_API_MODE` is
+set to `http` at image build time; the default empty `VITE_API_BASE` means the
+browser calls the same-origin `/api` path.
+
 ## 数据源
 
 - 默认 `mock`：全部数据来自 `src/api/mock/`（MOCK ONLY，内存态，刷新即重置）。

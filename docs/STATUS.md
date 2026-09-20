@@ -32,8 +32,8 @@ Integration Risks:
 
 Validation:
 - Publisher strict TypeScript check passed.
-- Publisher Vitest checks passed (3 tests).
-- Playwright Chromium generated and visually inspected the original Chinese fixture PDF (6 A4 pages).
+- Publisher Vitest checks passed (4 tests).
+- Playwright Chromium generated and visually inspected the original Chinese fixture PDF (7 A4 pages, including a controlled full-width image asset).
 - Backend strict TypeScript check passed for contracts, db, domain, api (and publisher).
 - Backend Vitest: contracts 15, db 7, domain 23, api 15 — 60 tests passed against real PostgreSQL.
 - `pnpm db:migrate` applied the M0 migration to the development database and was re-run to confirm it is repeatable.

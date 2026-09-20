@@ -7,3 +7,9 @@ infra/backend.env
 tmp/
 dist/
 coverage/
+
+# User-provided layout references are local inputs, not redistributable source.
+docs/examplePDF/
+
+# Publisher render artifacts are reproducible and should not be committed.
+output/

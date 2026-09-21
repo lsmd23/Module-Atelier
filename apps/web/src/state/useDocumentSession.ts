@@ -36,8 +36,10 @@ export interface DocumentSession {
  * 编辑器挂载期间内容是唯一事实来源；外部变更（如 Patch 应用）
  * 只能通过重建编辑器（editorKey）进入。
  */
-export function useDocumentSession(documentId: string): DocumentSession {
+export function useDocumentSession(documentId: string, opts?: { autosaveDelayMs?: number }): DocumentSession {
   const queryClient = useQueryClient();
+  const autosaveDelayRef = useRef(opts?.autosaveDelayMs ?? AUTOSAVE_DELAY_MS);
+  autosaveDelayRef.current = opts?.autosaveDelayMs ?? AUTOSAVE_DELAY_MS;
   const [saveState, setSaveState] = useState<SaveState>({ kind: "saved", revision: 0 });
   const [recovery, setRecovery] = useState<RecoveryDecision | null>(null);
   // 强制重载计数器：React Query 结构共享会让"内容相同"的 refetch 不产生新引用，
@@ -123,7 +125,7 @@ export function useDocumentSession(documentId: string): DocumentSession {
           // 保存期间作者又改了：标记 dirty 并安排下一轮
           setSaveState(reduceSave(after, { type: "EDIT" }));
           pendingContentRef.current = current ?? null;
-          saveTimer.current = setTimeout(() => void doSave(), AUTOSAVE_DELAY_MS);
+          saveTimer.current = setTimeout(() => void doSave(), autosaveDelayRef.current);
         } else {
           setSaveState(after);
           void deleteDraft(doc.id).catch(() => undefined);
@@ -149,7 +151,7 @@ export function useDocumentSession(documentId: string): DocumentSession {
       clearTimers();
       // composition 期间不排程（compositionend 会补发一次 onDocChanged）
       if (composingGuard.current?.()) return;
-      saveTimer.current = setTimeout(() => void doSave(), AUTOSAVE_DELAY_MS);
+      saveTimer.current = setTimeout(() => void doSave(), autosaveDelayRef.current);
       previewTimer.current = setTimeout(() => setPreviewContent(content), PREVIEW_DELAY_MS);
       draftTimer.current = setTimeout(() => {
         const doc = documentRef.current;

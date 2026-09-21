@@ -100,6 +100,7 @@ export function ProjectSidebar({
           const items = filtered.filter((e) => e.type === sec.type);
           return (
             <div key={sec.type} className="mb-3">
+
               <div className="rule-ornament mb-1.5 px-1">
                 <span className="label-caps text-[11px]">
                   {sec.label}
@@ -143,6 +144,16 @@ export function ProjectSidebar({
             </div>
           );
         })}
+      </div>
+      <div className="shrink-0 border-t border-hairline p-2">
+        <button
+          type="button"
+          onClick={() => useUiStore.getState().setSettingsOpen(true)}
+          className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-ink-soft hover:bg-parchment-deep"
+          aria-label="设置"
+        >
+          <span aria-hidden>⚙</span> 设置
+        </button>
       </div>
     </nav>
   );

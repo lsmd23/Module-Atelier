@@ -14,3 +14,6 @@ docs/examplePDF/
 
 # Publisher render artifacts are reproducible and should not be committed.
 output/
+
+# Local agent instructions (session-specific, not project source)
+AGENTS.md

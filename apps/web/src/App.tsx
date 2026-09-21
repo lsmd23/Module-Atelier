@@ -18,6 +18,8 @@ import { MockPdfPreview } from "./preview/MockPdfPreview";
 import { extractReferences } from "./preview/mockRenderer";
 import { useDocumentSession } from "./state/useDocumentSession";
 import { useUiStore } from "./state/uiStore";
+import { SettingsDialog } from "./settings/SettingsDialog";
+import { AccountDialog } from "./account/AccountDialog";
 import { SuggestionDetail } from "./suggestions/SuggestionDetail";
 import { SuggestionInbox } from "./suggestions/SuggestionInbox";
 import { PatchReview } from "./suggestions/PatchReview";
@@ -36,8 +38,18 @@ export default function App() {
   const setReviewingSuggestion = useUiStore((s) => s.setReviewingSuggestion);
   const selectEntity = useUiStore((s) => s.selectEntity);
   const interventionMode = useUiStore((s) => s.interventionMode);
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
+  const accountOpen = useUiStore((s) => s.accountOpen);
+  const editorFontSize = useUiStore((s) => s.editorFontSize);
+  const autosaveDelayMs = useUiStore((s) => s.autosaveDelayMs);
+  const theme = useUiStore((s) => s.theme);
 
-  const session = useDocumentSession(currentDocumentId);
+  // 主题应用到 <html data-theme>，样式全部由 CSS 变量跟随
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  const session = useDocumentSession(currentDocumentId, { autosaveDelayMs });
   const [editorHandle, setEditorHandle] = useState<MarkdownEditorHandle | null>(null);
   const bindEditor = useCallback(
     (h: MarkdownEditorHandle | null) => {
@@ -199,7 +211,10 @@ export default function App() {
 
         <main className="flex min-w-0 flex-1">
           {showEditor && (
-            <div className="flex min-w-0 flex-1 flex-col bg-paper">
+            <div
+              className="flex min-w-0 flex-1 flex-col bg-paper"
+              style={{ ["--editor-font-size" as string]: editorFontSize }}
+            >
               <EditorToolbar
                 editorHandle={editorHandle}
                 onCreateEntityFromSelection={(name) => setCreateEntityDraft({ name, type: null })}
@@ -337,6 +352,10 @@ export default function App() {
       </div>
 
       {session.recovery && <RestoreDraftDialog decision={session.recovery} onResolve={session.resolveRecovery} />}
+
+      {settingsOpen && <SettingsDialog />}
+
+      {accountOpen && <AccountDialog />}
 
       {createEntityDraft && (
         <CreateEntityDialog

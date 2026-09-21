@@ -36,7 +36,7 @@ export function CreateEntityDialog({
       role="dialog"
       aria-modal="true"
       aria-label="创建实体"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6"
       onClick={onClose}
     >
       <div

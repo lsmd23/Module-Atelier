@@ -37,7 +37,12 @@ beforeAll(async () => {
       DATABASE_URL: requireTestDatabaseUrl(),
       LOG_LEVEL: "silent",
       API_PORT: "3000",
-      DEFAULT_ACTOR_ID: "api-test-actor"
+      DEFAULT_ACTOR_ID: "api-test-actor",
+      // Test-only values; AUTH_DEV_EXPOSE_CODE lets the suite read the code
+      // from the response instead of the mail transport.
+      BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret",
+      BETTER_AUTH_URL: "http://127.0.0.1:3000",
+      AUTH_DEV_EXPOSE_CODE: "true"
     }),
     database: { db: context.db, pool: context.pool }
   });
@@ -91,7 +96,7 @@ describe("health", () => {
     const body = healthResponseSchema.parse(response.json());
     expect(body.data.database).toBe("up");
     expect(body.data.status).toBe("ok");
-    expect(body.data.contractVersion).toBe("0.2.0");
+    expect(body.data.contractVersion).toBe("0.3.0");
   });
 });
 

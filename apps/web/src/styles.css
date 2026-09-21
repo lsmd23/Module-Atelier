@@ -1,0 +1,179 @@
+@import "tailwindcss";
+
+/*
+ * Module Atelier — "奇幻手稿 / Atelier" 主题
+ * 原则：安静、专业、可长时间写作。奇幻感来自纸张、墨色、衬线字体与克制
+ * 的装饰线，而不是发光、渐变和动画。
+ */
+@theme {
+  --color-parchment: #f1e9d6;
+  --color-parchment-deep: #e6dabd;
+  --color-paper: #faf5e8;
+  --color-ink: #2b2118;
+  --color-ink-soft: #5a4a34;
+  --color-ink-faint: #8d7c5c;
+  --color-hairline: #d8caa6;
+  --color-oxblood: #7c2d2d;
+  --color-oxblood-deep: #5f1f1f;
+  --color-brass: #8f6b29;
+  --color-forest: #3d5a3f;
+  --color-arcane: #4a3d66;
+  --color-azure: #2f4d6b;
+
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+    "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-serif);
+  color: var(--color-ink);
+  background-color: var(--color-parchment);
+  /* 极淡的纸纹：只用两层 radial 噪点，不影响性能与可读性 */
+  background-image:
+    radial-gradient(ellipse at 20% 10%, rgba(143, 107, 41, 0.05), transparent 55%),
+    radial-gradient(ellipse at 85% 90%, rgba(124, 45, 45, 0.04), transparent 50%);
+}
+
+/* 小型大写标签 —— 界面 chrome 用书目式小标题 */
+.label-caps {
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+}
+
+/* 章节分隔花线 */
+.rule-ornament {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-brass);
+}
+.rule-ornament::before,
+.rule-ornament::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--color-hairline);
+}
+
+/* ── CodeMirror 主题贴合手稿风 ─────────────────────────── */
+.cm-editor {
+  height: 100%;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  line-height: 1.85;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+.cm-editor .cm-scroller {
+  font-family: var(--font-serif);
+}
+.cm-editor .cm-content {
+  padding: 2.5rem 3rem 45vh;
+  max-width: 46rem;
+  margin: 0 auto;
+  caret-color: var(--color-oxblood);
+}
+.cm-editor .cm-cursor {
+  border-left-color: var(--color-oxblood);
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+.cm-editor .cm-selectionBackground,
+.cm-editor .cm-content ::selection {
+  background: rgba(143, 107, 41, 0.22) !important;
+}
+.cm-editor .cm-activeLine {
+  background: rgba(143, 107, 41, 0.06);
+}
+
+/* 实体引用 [[…]] */
+.cm-entity-ref {
+  color: var(--color-forest);
+  border-bottom: 1px dotted var(--color-forest);
+  cursor: pointer;
+}
+.cm-entity-ref-missing {
+  color: var(--color-oxblood);
+  border-bottom: 1px dashed var(--color-oxblood);
+  cursor: pointer;
+}
+.cm-directive-line {
+  color: var(--color-brass);
+  font-size: 0.85em;
+}
+
+/* ── 模拟书页（MOCK 预览）──────────────────────────────── */
+.book-page {
+  background: var(--color-paper);
+  box-shadow:
+    0 1px 2px rgba(43, 33, 24, 0.18),
+    0 12px 32px rgba(43, 33, 24, 0.22);
+  border: 1px solid var(--color-hairline);
+  container-type: inline-size;
+}
+.book-columns {
+  column-count: 1;
+}
+/* 容器够宽（全屏预览 44rem 页宽）才排双栏；分栏模式下单栏保持可读 */
+@container (min-width: 40rem) {
+  .book-columns {
+    column-count: 2;
+    column-gap: 2.2rem;
+    column-rule: 1px solid rgba(216, 202, 166, 0.5);
+  }
+}
+.drop-cap::first-letter {
+  float: left;
+  font-size: 3.1em;
+  line-height: 0.85;
+  padding: 0.08em 0.12em 0 0;
+  color: var(--color-oxblood);
+  font-weight: 600;
+}
+
+/* 资料卡与信息块的印刷风 */
+.statblock {
+  break-inside: avoid;
+  border-top: 3px solid var(--color-oxblood);
+  border-bottom: 3px solid var(--color-oxblood);
+  background: rgba(124, 45, 45, 0.05);
+}
+.lorebox {
+  break-inside: avoid;
+  border: 1px solid var(--color-brass);
+  background: rgba(143, 107, 41, 0.07);
+}
+.readaloud {
+  break-inside: avoid;
+  border-left: 3px solid var(--color-forest);
+  background: rgba(61, 90, 63, 0.06);
+  font-style: italic;
+}
+
+/* 克制的滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-hairline);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,0 +1,30 @@
+name: module-atelier-web
+
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_MODE: ${VITE_API_MODE:-http}
+        VITE_API_BASE: ${VITE_API_BASE:-}
+    environment:
+      API_UPSTREAM: ${API_UPSTREAM:-api:3000}
+    ports:
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8080}:8080"
+    networks:
+      - backend
+    init: true
+    read_only: true
+    tmpfs:
+      - /data:uid=10001,gid=10001,mode=1700
+      - /config:uid=10001,gid=10001,mode=1700
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 10s
+    restart: unless-stopped
+
+networks:
+  backend:
+    external: true
+    name: ${BACKEND_NETWORK:-module-atelier_backend}

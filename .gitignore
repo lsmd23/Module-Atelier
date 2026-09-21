@@ -3,6 +3,7 @@ node_modules/
 .env.*
 !.env.example
 infra/backend.env
+apps/web/frontend.env
 .DS_Store
 tmp/
 dist/

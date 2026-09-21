@@ -21,7 +21,7 @@ import {
 
 const strengthColor = ["bg-oxblood", "bg-oxblood", "bg-brass", "bg-forest", "bg-forest"];
 
-/** 开场提示词式轮替名言（D&D 官方作品 + 桌面传统），9 秒淡出淡入。 */
+/** 开场提示词式轮替名言（D&D 官方作品 + 桌面传统），15 秒淡出淡入，免打扰。 */
 function RotatingQuote() {
   const [index, setIndex] = useState(() => Math.floor(Math.random() * tableQuotes.length));
   const [visible, setVisible] = useState(true);
@@ -33,7 +33,7 @@ function RotatingQuote() {
         setIndex((i) => (i + 1) % tableQuotes.length);
         setVisible(true);
       }, 450);
-    }, 9000);
+    }, 15_000);
     return () => clearInterval(t);
   }, []);
 
@@ -45,20 +45,6 @@ function RotatingQuote() {
         <blockquote className="text-sm italic leading-relaxed opacity-95">「{quote.text}」</blockquote>
         <figcaption className="mt-2 text-[11px] opacity-60">—— {quote.source}</figcaption>
       </div>
-      <button
-        type="button"
-        onClick={() => {
-          setVisible(false);
-          setTimeout(() => {
-            setIndex((i) => (i + 1) % tableQuotes.length);
-            setVisible(true);
-          }, 200);
-        }}
-        className="mt-2 text-[11px] opacity-50 hover:opacity-90"
-        aria-label="换一句名言"
-      >
-        换一句 ⤾
-      </button>
     </figure>
   );
 }
@@ -73,9 +59,9 @@ function BrandPanel() {
         <p className="label-caps mt-1 text-xs opacity-80">Adventure Authoring IDE</p>
         <div className="my-6 border-t border-white/20" />
         <blockquote className="text-sm leading-relaxed opacity-90">
-          「浓雾从北方的山脊压下来，像一床浸了水的灰毯，把镇口的绞架和路牌一并吞没。」
+          「五百年前，矮人和侏儒各氏族签订了著名的『凡戴尔协定』，共同分享潮音洞穴下的富矿资源。」
         </blockquote>
-        <p className="mt-2 text-xs opacity-60">—— 《雾锁矿脉》第一章</p>
+        <p className="mt-2 text-xs opacity-60">—— 《凡戴尔的失落矿坑》开篇</p>
       </div>
       <div className="mt-6 border-t border-white/20 pt-4">
         <RotatingQuote />

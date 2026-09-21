@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { AuthScreen } from "./auth/AuthScreen";
+import { useAuthStore } from "./auth/authStore";
 import "./styles.css";
 
 const queryClient = new QueryClient({
@@ -14,10 +16,16 @@ const queryClient = new QueryClient({
   }
 });
 
+/** 认证门禁：未登录时只渲染进入页，工作台（及其数据流）不挂载。 */
+function Root() {
+  const status = useAuthStore((s) => s.status);
+  return status === "authenticated" ? <App /> : <AuthScreen />;
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <Root />
     </QueryClientProvider>
   </StrictMode>
 );

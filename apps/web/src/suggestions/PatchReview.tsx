@@ -101,7 +101,7 @@ export function PatchReview({
       role="dialog"
       aria-modal="true"
       aria-label="补丁审阅"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6"
       onClick={onClose}
     >
       <div

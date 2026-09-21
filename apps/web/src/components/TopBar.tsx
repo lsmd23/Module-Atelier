@@ -9,6 +9,7 @@ import {
 } from "../state/uiStore";
 import { mockScenarioControl } from "../api/mock/mockApi";
 import { apiMode } from "../api";
+import { AccountPopover } from "./AccountPopover";
 
 const viewModes: { id: ViewMode; label: string }[] = [
   { id: "editor", label: "写作" },
@@ -192,6 +193,7 @@ export function TopBar({ saveState, pendingCount }: { saveState: SaveState; pend
 
       <InterventionMenu />
       {apiMode === "mock" && <DevMenu />}
+      <AccountPopover />
 
       <button
         type="button"

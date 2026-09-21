@@ -5,23 +5,85 @@
  * 原则：安静、专业、可长时间写作。奇幻感来自纸张、墨色、衬线字体与克制
  * 的装饰线，而不是发光、渐变和动画。
  */
-@theme {
-  --color-parchment: #f1e9d6;
-  --color-parchment-deep: #e6dabd;
-  --color-paper: #faf5e8;
-  --color-ink: #2b2118;
-  --color-ink-soft: #5a4a34;
-  --color-ink-faint: #8d7c5c;
-  --color-hairline: #d8caa6;
-  --color-oxblood: #7c2d2d;
-  --color-oxblood-deep: #5f1f1f;
-  --color-brass: #8f6b29;
-  --color-forest: #3d5a3f;
-  --color-arcane: #4a3d66;
-  --color-azure: #2f4d6b;
+/*
+ * 三套主题经运行时 CSS 变量切换（<html data-theme="…">）。
+ * @theme inline 让 Tailwind 工具类引用变量本身而非编译期常量。
+ */
+@theme inline {
+  --color-parchment: var(--t-parchment);
+  --color-parchment-deep: var(--t-parchment-deep);
+  --color-paper: var(--t-paper);
+  --color-ink: var(--t-ink);
+  --color-ink-soft: var(--t-ink-soft);
+  --color-ink-faint: var(--t-ink-faint);
+  --color-hairline: var(--t-hairline);
+  --color-oxblood: var(--t-oxblood);
+  --color-oxblood-deep: var(--t-oxblood-deep);
+  --color-brass: var(--t-brass);
+  --color-forest: var(--t-forest);
+  --color-arcane: var(--t-arcane);
+  --color-azure: var(--t-azure);
 
   --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
     "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+}
+
+/* 手稿羊皮纸（默认，亮色） */
+:root,
+[data-theme="parchment"] {
+  --t-parchment: #f1e9d6;
+  --t-parchment-deep: #e6dabd;
+  --t-paper: #faf5e8;
+  --t-ink: #2b2118;
+  --t-ink-soft: #5a4a34;
+  --t-ink-faint: #8d7c5c;
+  --t-hairline: #d8caa6;
+  --t-oxblood: #7c2d2d;
+  --t-oxblood-deep: #5f1f1f;
+  --t-brass: #8f6b29;
+  --t-forest: #3d5a3f;
+  --t-arcane: #4a3d66;
+  --t-azure: #2f4d6b;
+  --bg-glow-1: rgba(143, 107, 41, 0.05);
+  --bg-glow-2: rgba(124, 45, 45, 0.04);
+}
+
+/* 烛夜（暖暗色） */
+[data-theme="candlelight"] {
+  --t-parchment: #231b12;
+  --t-parchment-deep: #2c2216;
+  --t-paper: #2b2115;
+  --t-ink: #eadfc6;
+  --t-ink-soft: #c8b899;
+  --t-ink-faint: #93835f;
+  --t-hairline: #4d3f2a;
+  --t-oxblood: #d08068;
+  --t-oxblood-deep: #e09982;
+  --t-brass: #c9a25e;
+  --t-forest: #86a98b;
+  --t-arcane: #b39ddb;
+  --t-azure: #84a9c9;
+  --bg-glow-1: rgba(201, 162, 94, 0.06);
+  --bg-glow-2: rgba(208, 128, 104, 0.05);
+}
+
+/* 雾灰（冷灰蓝亮色，低饱和） */
+[data-theme="mistgray"] {
+  --t-parchment: #e7e9ec;
+  --t-parchment-deep: #dbdee3;
+  --t-paper: #f7f8fa;
+  --t-ink: #24292f;
+  --t-ink-soft: #4d555f;
+  --t-ink-faint: #7f8892;
+  --t-hairline: #c7ccd3;
+  --t-oxblood: #7d3b46;
+  --t-oxblood-deep: #64303a;
+  --t-brass: #6e7c8a;
+  --t-forest: #4c6e5d;
+  --t-arcane: #6d6486;
+  --t-azure: #456178;
+  --bg-glow-1: rgba(110, 124, 138, 0.05);
+  --bg-glow-2: rgba(69, 97, 120, 0.04);
 }
 
 html,
@@ -36,8 +98,8 @@ body {
   background-color: var(--color-parchment);
   /* 极淡的纸纹：只用两层 radial 噪点，不影响性能与可读性 */
   background-image:
-    radial-gradient(ellipse at 20% 10%, rgba(143, 107, 41, 0.05), transparent 55%),
-    radial-gradient(ellipse at 85% 90%, rgba(124, 45, 45, 0.04), transparent 50%);
+    radial-gradient(ellipse at 20% 10%, var(--bg-glow-1), transparent 55%),
+    radial-gradient(ellipse at 85% 90%, var(--bg-glow-2), transparent 50%);
 }
 
 /* 小型大写标签 —— 界面 chrome 用书目式小标题 */
@@ -64,7 +126,8 @@ body {
 .cm-editor {
   height: 100%;
   font-family: var(--font-serif);
-  font-size: 1.05rem;
+  /* 字号来自设置中心，经容器上的 CSS 变量注入 */
+  font-size: var(--editor-font-size, 1.05rem);
   line-height: 1.85;
   background: var(--color-paper);
   color: var(--color-ink);

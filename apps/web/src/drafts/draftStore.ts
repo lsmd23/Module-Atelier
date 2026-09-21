@@ -45,3 +45,9 @@ export async function loadDraft(documentId: string): Promise<LocalDraft | null> 
 export async function deleteDraft(documentId: string): Promise<void> {
   await tx("readwrite", (s) => s.delete(documentId));
 }
+
+/** 设置中心「本地数据」用：列出全部本地草稿。 */
+export async function listDrafts(): Promise<LocalDraft[]> {
+  const result = await tx("readonly", (s) => s.getAll() as IDBRequest<LocalDraft[]>);
+  return result ?? [];
+}

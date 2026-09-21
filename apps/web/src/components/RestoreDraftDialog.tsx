@@ -18,7 +18,7 @@ export function RestoreDraftDialog({
       role="dialog"
       aria-modal="true"
       aria-label="恢复本地草稿"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6"
     >
       <div className="w-full max-w-lg rounded-lg border border-hairline bg-parchment p-5 shadow-2xl">
         <h2 className="text-base font-semibold">检测到未保存的本地草稿</h2>

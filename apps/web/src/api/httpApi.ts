@@ -4,6 +4,7 @@ import {
   documentResponseSchema,
   entityListResponseSchema,
   entityResponseSchema,
+  healthResponseSchema,
   projectResponseSchema,
   type Conflict
 } from "@module-atelier/contracts";
@@ -72,6 +73,38 @@ export const httpApi: AtelierApi = {
     return request("GET", route(apiRoutes.project, { projectId }), undefined, (d) =>
       projectResponseSchema.parse({ data: d }).data
     );
+  },
+
+  getHealth() {
+    return request("GET", apiRoutes.health, undefined, (d) => healthResponseSchema.parse({ data: d }).data);
+  },
+
+  listMembers(): Promise<never> {
+    // contracts 0.2.0 无成员/权限路由（M0 单租户）
+    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
+  },
+
+  /* auth：contracts 0.2.0 无认证路由（M0 无 auth），全部抛 ROUTE_NOT_IN_CONTRACT */
+  login(): Promise<never> {
+    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
+  },
+  register(): Promise<never> {
+    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
+  },
+  sendVerificationCode(): Promise<never> {
+    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
+  },
+  verifyEmail(): Promise<never> {
+    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
+  },
+  logout(): Promise<never> {
+    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
+  },
+  updateProfile(): Promise<never> {
+    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
+  },
+  changePassword(): Promise<never> {
+    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
   },
 
   async listDocuments(projectId) {

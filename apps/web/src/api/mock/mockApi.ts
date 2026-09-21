@@ -1,8 +1,12 @@
 import type { AuthorQuestion, Document, Entity, PatchSet, Suggestion } from "@module-atelier/contracts";
+import { contractVersion } from "@module-atelier/contracts";
 import type {
+  AccountUser,
   AtelierApi,
+  AuthResult,
   CreateEntityRequest,
   MockScenarioControl,
+  RegisterRequest,
   SaveDocumentRequest,
   SaveDocumentResult,
   SuggestionAction
@@ -32,6 +36,8 @@ class MockApi implements AtelierApi {
   private patchSets = new Map<string, PatchSet>([[mockPatchSet.id, structuredClone(mockPatchSet)]]);
   private questions = structuredClone(mockQuestions);
   private suggestionListeners = new Set<() => void>();
+  /** MOCK ONLY：演示用账户。验证码固定 246810。 */
+  private accountUser: AccountUser | null = null;
 
   flags = {
     simulateOffline: false,
@@ -55,6 +61,21 @@ class MockApi implements AtelierApi {
   async getProject(_projectId: string) {
     await latency();
     return structuredClone(mockProject);
+  }
+
+  async getHealth() {
+    await latency();
+    return { status: "ok" as const, database: "up" as const, contractVersion };
+  }
+
+  /** MOCK ONLY：成员与权限契约未冻结（M0 单租户），以下为演示数据。 */
+  async listMembers(_projectId: string) {
+    await latency();
+    return [
+      { id: "u-author", name: "陆离", role: "author" as const, you: true, note: "本机作者 · 所有写入归于 DEFAULT_ACTOR_ID" },
+      { id: "u-scribe", name: "见习誊写员", role: "collaborator" as const, you: false, note: "Agent 协作者席位（演示）" },
+      { id: "u-reader", name: "雾中读者", role: "reader" as const, you: false, note: "只读席位（演示）" }
+    ];
   }
 
   async listDocuments(_projectId: string) {
@@ -217,6 +238,88 @@ class MockApi implements AtelierApi {
     if (!q) throw new Error("NOT_FOUND");
     q.status = status;
     return structuredClone(q);
+  }
+
+  /* ── MOCK ONLY：认证。契约未冻结前的演示实现 ─────────────────── */
+
+  async login(email: string, password: string): Promise<AuthResult> {
+    await latency();
+    if (password.length < 8) throw new Error("INVALID_CREDENTIALS");
+    const user: AccountUser = {
+      id: "u-author",
+      username: email.split("@")[0] ?? "author",
+      email,
+      displayName: "陆离",
+      role: "author",
+      emailVerified: true,
+      status: "active",
+      plan: "creator",
+      createdAt: "2026-09-01T08:00:00Z",
+      lastLoginAt: now()
+    };
+    this.accountUser = user;
+    return { session: { user: structuredClone(user), sessionId: `sess-${Date.now()}` } };
+  }
+
+  async register(req: RegisterRequest): Promise<AuthResult> {
+    await latency();
+    this.accountUser = {
+      id: `u-${Math.random().toString(36).slice(2, 8)}`,
+      username: req.email.split("@")[0] ?? "author",
+      email: req.email,
+      displayName: req.displayName,
+      role: "author",
+      emailVerified: false,
+      status: "active",
+      plan: "free",
+      createdAt: now(),
+      lastLoginAt: now()
+    };
+    return { session: null, requiresVerification: true };
+  }
+
+  async sendVerificationCode(_email: string): Promise<void> {
+    await latency();
+    // MOCK：验证码固定 246810
+  }
+
+  async verifyEmail(email: string, code: string): Promise<AccountUser> {
+    await latency();
+    if (code !== "246810") throw new Error("INVALID_CODE");
+    if (!this.accountUser || this.accountUser.email !== email) {
+      this.accountUser = {
+        id: `u-${Math.random().toString(36).slice(2, 8)}`,
+        username: email.split("@")[0] ?? "author",
+        email,
+        displayName: email.split("@")[0] ?? "author",
+        role: "author",
+        emailVerified: true,
+        status: "active",
+        plan: "free",
+        createdAt: now(),
+        lastLoginAt: now()
+      };
+    }
+    this.accountUser.emailVerified = true;
+    this.accountUser.lastLoginAt = now();
+    return structuredClone(this.accountUser);
+  }
+
+  async logout(): Promise<void> {
+    await latency();
+  }
+
+  async updateProfile(_userId: string, patch: { displayName?: string }): Promise<AccountUser> {
+    await latency();
+    if (!this.accountUser) throw new Error("UNAUTHENTICATED");
+    if (patch.displayName !== undefined) this.accountUser.displayName = patch.displayName;
+    return structuredClone(this.accountUser);
+  }
+
+  async changePassword(_userId: string, current: string, next: string): Promise<void> {
+    await latency();
+    if (current.length < 8) throw new Error("INVALID_CREDENTIALS");
+    if (next.length < 8) throw new Error("WEAK_PASSWORD");
   }
 
   /** MOCK ONLY：模拟 Ambient Muse 静默推送一条新建议（只更新角标，不打扰作者）。 */

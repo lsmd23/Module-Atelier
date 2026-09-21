@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, apiMode } from "../api";
 import { useUiStore } from "../state/uiStore";
 import { useAuthStore } from "./authStore";
+import { tableQuotes } from "./quotes";
 import {
   isValidVerificationCode,
   passwordStrength,
@@ -20,6 +21,48 @@ import {
 
 const strengthColor = ["bg-oxblood", "bg-oxblood", "bg-brass", "bg-forest", "bg-forest"];
 
+/** 开场提示词式轮替名言（D&D 官方作品 + 桌面传统），9 秒淡出淡入。 */
+function RotatingQuote() {
+  const [index, setIndex] = useState(() => Math.floor(Math.random() * tableQuotes.length));
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setIndex((i) => (i + 1) % tableQuotes.length);
+        setVisible(true);
+      }, 450);
+    }, 9000);
+    return () => clearInterval(t);
+  }, []);
+
+  const quote = tableQuotes[index]!;
+
+  return (
+    <figure aria-live="off" className="min-h-24">
+      <div className="transition-opacity duration-500" style={{ opacity: visible ? 1 : 0 }}>
+        <blockquote className="text-sm italic leading-relaxed opacity-95">「{quote.text}」</blockquote>
+        <figcaption className="mt-2 text-[11px] opacity-60">—— {quote.source}</figcaption>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          setVisible(false);
+          setTimeout(() => {
+            setIndex((i) => (i + 1) % tableQuotes.length);
+            setVisible(true);
+          }, 200);
+        }}
+        className="mt-2 text-[11px] opacity-50 hover:opacity-90"
+        aria-label="换一句名言"
+      >
+        换一句 ⤾
+      </button>
+    </figure>
+  );
+}
+
 function BrandPanel() {
   // 品牌页用固定的深红书面色，不随界面主题漂移（书封是品牌的一部分）
   return (
@@ -34,11 +77,9 @@ function BrandPanel() {
         </blockquote>
         <p className="mt-2 text-xs opacity-60">—— 《雾锁矿脉》第一章</p>
       </div>
-      <ul className="space-y-2 text-xs leading-relaxed opacity-80">
-        <li>✒ 作者执笔，Agent 协助，编译器成书</li>
-        <li>✦ 建议静默到达，改动必经你审阅</li>
-        <li>⛁ 本地草稿 + 服务端修订，不丢一个字</li>
-      </ul>
+      <div className="mt-6 border-t border-white/20 pt-4">
+        <RotatingQuote />
+      </div>
     </div>
   );
 }

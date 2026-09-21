@@ -8,6 +8,13 @@
       "when": 1789797525141,
       "tag": "0000_hard_human_fly",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790004139628,
+      "tag": "0001_burly_kid_colt",
+      "breakpoints": true
     }
   ]
 }

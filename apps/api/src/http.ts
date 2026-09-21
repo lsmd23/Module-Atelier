@@ -4,6 +4,7 @@ import type { ApiError, ApiErrorCode, ApiErrorDetails, FieldIssue } from "@modul
 import { pgErrorCode, pgErrorCodes } from "@module-atelier/db";
 import { DomainConstraintError, NotFoundError, RevisionConflictError } from "@module-atelier/domain";
 import type { PageRequest } from "@module-atelier/domain";
+import type { AuthFailure } from "./auth/errors.ts";
 
 /** Thrown when a request body, query or path parameter fails its Zod schema. */
 export class RequestValidationError extends Error {
@@ -14,6 +15,27 @@ export class RequestValidationError extends Error {
     this.name = "RequestValidationError";
     this.issues = issues;
   }
+}
+
+/**
+ * An authentication or authorization failure carrying a contract error code.
+ * Better Auth's own vocabulary is translated into these before it leaves the
+ * API (see `auth/errors.ts`).
+ */
+export class AuthFailureError extends Error {
+  readonly code: ApiErrorCode;
+  readonly details: ApiErrorDetails | undefined;
+
+  constructor(failure: AuthFailure) {
+    super(failure.message);
+    this.name = "AuthFailureError";
+    this.code = failure.code;
+    this.details = failure.details;
+  }
+}
+
+export function unauthenticated(): AuthFailureError {
+  return new AuthFailureError({ code: "UNAUTHENTICATED", message: "authentication is required" });
 }
 
 /**
@@ -72,6 +94,13 @@ export type ErrorResponse = { statusCode: number; body: ApiError };
  * stack trace or author content leaks out. The full error is logged separately.
  */
 export function toErrorResponse(error: unknown, requestId: string): ErrorResponse {
+  if (error instanceof AuthFailureError) {
+    return {
+      statusCode: apiErrorStatus[error.code],
+      body: envelopeError(error.code, error.message, requestId, error.details)
+    };
+  }
+
   if (error instanceof RequestValidationError) {
     return {
       statusCode: apiErrorStatus.VALIDATION_ERROR,

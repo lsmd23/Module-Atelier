@@ -7,9 +7,9 @@ import {
   updateProjectRequestSchema
 } from "@module-atelier/contracts";
 import { pageRequest, parseInput } from "../http.ts";
-import type { ApiServices } from "../types.ts";
+import type { ApiRouteDeps } from "../types.ts";
 
-export function registerProjectRoutes(app: FastifyInstance, services: ApiServices): void {
+export function registerProjectRoutes(app: FastifyInstance, services: ApiRouteDeps): void {
   app.get(apiRoutes.projects, async (request) => {
     const query = parseInput(pageQuerySchema, request.query);
     return { data: await services.projects.list(pageRequest(query)) };

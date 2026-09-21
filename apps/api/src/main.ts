@@ -31,7 +31,14 @@ process.on("SIGTERM", () => {
 
 try {
   await app.listen({ host: config.host, port: config.port });
-  app.log.info({ actorId: config.actorId }, "M0 API ready (no authentication is implemented yet)");
+  app.log.info(
+    {
+      actorId: config.actorId,
+      authBaseUrl: config.authBaseUrl,
+      allowRegistration: config.allowRegistration
+    },
+    "API ready: /api/auth endpoints are live, project routes are not yet role-guarded"
+  );
 } catch (error) {
   app.log.error({ err: error }, "failed to start");
   await database.pool.end();

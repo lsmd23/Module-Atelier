@@ -7,9 +7,9 @@ import {
   relationParamsSchema
 } from "@module-atelier/contracts";
 import { pageRequest, parseInput } from "../http.ts";
-import type { ApiServices } from "../types.ts";
+import type { ApiRouteDeps } from "../types.ts";
 
-export function registerRelationRoutes(app: FastifyInstance, services: ApiServices): void {
+export function registerRelationRoutes(app: FastifyInstance, services: ApiRouteDeps): void {
   app.get(apiRoutes.projectRelations, async (request) => {
     const params = parseInput(projectParamsSchema, request.params);
     const query = parseInput(pageQuerySchema, request.query);

@@ -8,9 +8,9 @@ import {
   updateDocumentRequestSchema
 } from "@module-atelier/contracts";
 import { pageRequest, parseInput } from "../http.ts";
-import type { ApiServices } from "../types.ts";
+import type { ApiRouteDeps } from "../types.ts";
 
-export function registerDocumentRoutes(app: FastifyInstance, services: ApiServices): void {
+export function registerDocumentRoutes(app: FastifyInstance, services: ApiRouteDeps): void {
   app.get(apiRoutes.projectDocuments, async (request) => {
     const params = parseInput(projectParamsSchema, request.params);
     const query = parseInput(pageQuerySchema, request.query);
@@ -20,10 +20,12 @@ export function registerDocumentRoutes(app: FastifyInstance, services: ApiServic
   app.post(apiRoutes.projectDocuments, async (request, reply) => {
     const params = parseInput(projectParamsSchema, request.params);
     const body = parseInput(createDocumentRequestSchema, request.body);
-    const document = await services.documents.create(params.projectId, {
-      title: body.title,
-      content: body.content ?? ""
-    });
+    const session = await services.sessionOf(request);
+    const document = await services.documents.create(
+      params.projectId,
+      { title: body.title, content: body.content ?? "" },
+      session?.userId
+    );
     reply.code(201);
     return { data: document };
   });
@@ -40,11 +42,16 @@ export function registerDocumentRoutes(app: FastifyInstance, services: ApiServic
   app.patch(apiRoutes.document, async (request) => {
     const params = parseInput(documentParamsSchema, request.params);
     const body = parseInput(updateDocumentRequestSchema, request.body);
-    const document = await services.documents.update(params.documentId, {
-      baseRevision: body.baseRevision,
-      ...(body.title === undefined ? {} : { title: body.title }),
-      ...(body.content === undefined ? {} : { content: body.content })
-    });
+    const session = await services.sessionOf(request);
+    const document = await services.documents.update(
+      params.documentId,
+      {
+        baseRevision: body.baseRevision,
+        ...(body.title === undefined ? {} : { title: body.title }),
+        ...(body.content === undefined ? {} : { content: body.content })
+      },
+      session?.userId
+    );
     return { data: document };
   });
 

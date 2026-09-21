@@ -3,14 +3,19 @@ import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import type { Database } from "@module-atelier/db";
 import { createDocumentService, createEntityService, createProjectService, createRelationService } from "@module-atelier/domain";
+import { createAuth } from "./auth/auth.ts";
+import { createLogMailer } from "./auth/mailer.ts";
+import { createAuthRateLimiters } from "./auth/rate-limit.ts";
+import { createSessionResolver } from "./auth/session-resolver.ts";
 import type { ApiConfig } from "./config.ts";
 import { notFoundResponse, toErrorResponse } from "./http.ts";
+import { registerAuthRoutes } from "./routes/auth.ts";
 import { registerDocumentRoutes } from "./routes/documents.ts";
 import { registerEntityRoutes } from "./routes/entities.ts";
 import { registerHealthRoutes } from "./routes/health.ts";
 import { registerProjectRoutes } from "./routes/projects.ts";
 import { registerRelationRoutes } from "./routes/relations.ts";
-import type { ApiServices } from "./types.ts";
+import type { ApiRouteDeps } from "./types.ts";
 
 export type ServerDeps = {
   config: ApiConfig;
@@ -29,11 +34,46 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     bodyLimit
   });
 
-  const services: ApiServices = {
+  /**
+   * Phase 1 has no SMTP transport: codes are written to the log. With
+   * AUTH_DEV_EXPOSE_CODE the code is also kept in memory so the API can return
+   * it, and only then is it printed in full.
+   */
+  const mailer = createLogMailer(
+    (mail) => {
+      if (config.exposeVerificationCode) {
+        app.log.warn(
+          { email: mail.email, type: mail.type, code: mail.code },
+          "verification code issued (AUTH_DEV_EXPOSE_CODE is on: never enable this in a deployment)"
+        );
+        return;
+      }
+      app.log.info(
+        { email: mail.email, type: mail.type },
+        "verification code issued, but no mail transport is configured in this build"
+      );
+    },
+    { rememberCodes: config.exposeVerificationCode }
+  );
+
+  const auth = createAuth({
+    db: database.db,
+    config: {
+      secret: config.authSecret,
+      baseUrl: config.authBaseUrl,
+      trustedOrigins: config.trustedOrigins,
+      mailer
+    }
+  });
+
+  const sessionOf = createSessionResolver(auth);
+
+  const services: ApiRouteDeps = {
     projects: createProjectService({ db: database.db }),
     documents: createDocumentService({ db: database.db, actorId: config.actorId }),
     entities: createEntityService({ db: database.db, actorId: config.actorId }),
-    relations: createRelationService({ db: database.db })
+    relations: createRelationService({ db: database.db }),
+    sessionOf
   };
 
   // Correlation id for support and logs; never contains author content.
@@ -57,6 +97,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   registerHealthRoutes(app, { pool: database.pool });
+  registerAuthRoutes(app, {
+    auth,
+    db: database.db,
+    mailer,
+    allowRegistration: config.allowRegistration,
+    exposeVerificationCode: config.exposeVerificationCode,
+    rateLimiters: createAuthRateLimiters()
+  });
   registerProjectRoutes(app, services);
   registerDocumentRoutes(app, services);
   registerEntityRoutes(app, services);

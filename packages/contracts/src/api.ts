@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { accountSessionSchema, accountUserSchema, authSessionSchema } from "./auth.ts";
 import {
   conflictSchema,
   documentSchema,
@@ -41,6 +42,11 @@ export const apiLimits = {
 export const apiErrorCodes = [
   "VALIDATION_ERROR",
   "UNAUTHENTICATED",
+  "INVALID_CREDENTIALS",
+  "INVALID_CODE",
+  "WEAK_PASSWORD",
+  "EMAIL_NOT_VERIFIED",
+  "REGISTRATION_DISABLED",
   "FORBIDDEN",
   "NOT_FOUND",
   "CONFLICT",
@@ -50,10 +56,15 @@ export const apiErrorCodes = [
 ] as const;
 export type ApiErrorCode = (typeof apiErrorCodes)[number];
 
-/** HTTP status used for each error code. 401/403/429 are reserved until auth lands. */
+/** HTTP status used for each error code. */
 export const apiErrorStatus = {
   VALIDATION_ERROR: 400,
   UNAUTHENTICATED: 401,
+  INVALID_CREDENTIALS: 401,
+  INVALID_CODE: 400,
+  WEAK_PASSWORD: 400,
+  EMAIL_NOT_VERIFIED: 403,
+  REGISTRATION_DISABLED: 403,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   CONFLICT: 409,
@@ -298,6 +309,38 @@ export type EntityRelation = z.infer<typeof entityRelationSchema>;
 export const entityRelationListResponseSchema = envelope(paginated(entityRelationSchema));
 
 /* ------------------------------------------------------------------ */
+/* account responses                                                   */
+/* ------------------------------------------------------------------ */
+
+export const userResponseSchema = envelope(accountUserSchema);
+
+/**
+ * `requiresVerification` tells the client to open the code screen; `session` is
+ * null until the email is verified, because verification is what signs in.
+ */
+export const authResultResponseSchema = envelope(
+  z.object({
+    session: authSessionSchema.nullable(),
+    requiresVerification: z.boolean().optional()
+  })
+);
+
+export const verificationCodeResponseSchema = envelope(
+  z.object({
+    delivered: z.literal(true),
+    expiresInSeconds: z.number().int().positive(),
+    /** Only present when the server enables the development exposure flag. */
+    devCode: z.string().optional()
+  })
+);
+
+export const sessionListResponseSchema = envelope(paginated(accountSessionSchema));
+
+export const logoutResponseSchema = envelope(z.object({ signedOut: z.literal(true) }));
+
+export const passwordChangeResponseSchema = envelope(z.object({ updated: z.literal(true) }));
+
+/* ------------------------------------------------------------------ */
 /* routes                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -319,7 +362,19 @@ export const apiRoutes = {
   entity: `${apiPrefix}/entities/:entityId`,
   entityRevisions: `${apiPrefix}/entities/:entityId/revisions`,
   entityRelations: `${apiPrefix}/entities/:entityId/relations`,
-  relation: `${apiPrefix}/relations/:relationId`
+  relation: `${apiPrefix}/relations/:relationId`,
+  authRegister: `${apiPrefix}/auth/register`,
+  authLogin: `${apiPrefix}/auth/login`,
+  authLogout: `${apiPrefix}/auth/logout`,
+  authVerificationCode: `${apiPrefix}/auth/verification-code`,
+  authVerifyEmail: `${apiPrefix}/auth/verify-email`,
+  authMe: `${apiPrefix}/auth/me`,
+  authProfile: `${apiPrefix}/auth/profile`,
+  authPassword: `${apiPrefix}/auth/password`,
+  authPasswordResetRequest: `${apiPrefix}/auth/password-reset/request`,
+  authPasswordResetConfirm: `${apiPrefix}/auth/password-reset/confirm`,
+  authSessions: `${apiPrefix}/auth/sessions`,
+  authSession: `${apiPrefix}/auth/sessions/:sessionId`
 } as const;
 
 export type ApiRoutes = typeof apiRoutes;

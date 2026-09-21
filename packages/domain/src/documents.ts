@@ -19,19 +19,32 @@ export type UpdateDocumentInput = { baseRevision: number; title?: string; conten
 export function createDocumentService(deps: { db: DbClient; actorId: string }) {
   const { db, actorId } = deps;
 
-  async function recordRevision(tx: DbTransaction, row: DocumentRow, baseRevision: number): Promise<void> {
+  async function recordRevision(
+    tx: DbTransaction,
+    row: DocumentRow,
+    baseRevision: number,
+    actor: string
+  ): Promise<void> {
     await tx.insert(revisions).values({
       projectId: row.projectId,
       resourceType: "document",
       resourceId: row.id,
       revision: row.revision,
       baseRevision,
-      authorId: actorId,
+      authorId: actor,
       snapshot: toDocumentSnapshot(row)
     });
   }
 
-  async function create(projectId: string, input: CreateDocumentInput): Promise<Document> {
+  /**
+   * `actorId` defaults to the identity the service was built with; the API
+   * passes the signed-in user so revisions carry the real author.
+   */
+  async function create(
+    projectId: string,
+    input: CreateDocumentInput,
+    actorId: string = deps.actorId
+  ): Promise<Document> {
     return db.transaction(async (tx) => {
       await assertProjectExists(tx, projectId);
       const inserted = await tx
@@ -39,7 +52,7 @@ export function createDocumentService(deps: { db: DbClient; actorId: string }) {
         .values({ projectId, title: input.title, content: input.content })
         .returning();
       const row = requireRow(inserted, "documents insert");
-      await recordRevision(tx, row, 0);
+      await recordRevision(tx, row, 0, actorId);
       return toDocument(row);
     });
   }
@@ -54,7 +67,11 @@ export function createDocumentService(deps: { db: DbClient; actorId: string }) {
    * the revision, so repeated autosaves cannot inflate revision numbers (which
    * would make every AI patch look stale).
    */
-  async function update(documentId: string, input: UpdateDocumentInput): Promise<Document> {
+  async function update(
+    documentId: string,
+    input: UpdateDocumentInput,
+    actorId: string = deps.actorId
+  ): Promise<Document> {
     return db.transaction(async (tx) => {
       const found = await tx.select().from(documents).where(eq(documents.id, documentId)).for("update").limit(1);
       const row = found[0];
@@ -83,7 +100,7 @@ export function createDocumentService(deps: { db: DbClient; actorId: string }) {
         .where(eq(documents.id, documentId))
         .returning();
       const next = requireRow(updated, "documents update");
-      await recordRevision(tx, next, row.revision);
+      await recordRevision(tx, next, row.revision, actorId);
       return toDocument(next);
     });
   }

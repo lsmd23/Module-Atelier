@@ -26,8 +26,17 @@ What the frontend must provide or know:
 - **`baseRevision` on every document/entity PATCH**, and handling of 409
   `CONFLICT` using `error.details.conflict` (`expectedRevision`,
   `actualRevision`) for merge/reload UX.
-- **No session or identity yet.** There is no login, no `/api/me`, and every
-  write is attributed to `DEFAULT_ACTOR_ID`. Do not build auth UI against M0.
+- **Authentication is live** (`/api/auth/*`, contract 0.3.0). Sessions are
+  httpOnly cookies, so requests must send credentials and the client must treat
+  401 `UNAUTHENTICATED` as signed out and clear its local auth state. The
+  frontend currently talks to a mock: its nine auth methods map onto the
+  documented routes, and wiring them plus the dev proxy is BE-002 phase 5.
+- **Errors the auth UI should branch on**: `INVALID_CREDENTIALS`,
+  `EMAIL_NOT_VERIFIED`, `INVALID_CODE`, `WEAK_PASSWORD`,
+  `REGISTRATION_DISABLED`, `RATE_LIMITED`.
+- **Project routes are not role-guarded yet** (phase 2): being signed in does
+  not yet imply access control, so do not rely on the API to hide other
+  projects' data.
 - **No timestamps on entity/relation payloads.** `entitySchema` and
   `relationSchema` carry no `createdAt`/`updatedAt`; the database stores them.
   Sorting entities by recency needs either the revision number or a contract
@@ -67,6 +76,6 @@ approved, the Publisher snapshot remains a local prototype.
 
 ## Blockers
 
-- Authentication/authorization boundary is not implemented (M0 is single-tenant).
+- Project-level authorization is not implemented yet (BE-002 phase 2); authentication itself is.
 - Shared PublishSnapshot/Module IR contract and worker integration are not yet frozen.
 - Assets, outbox/pg-boss jobs and search are not implemented.

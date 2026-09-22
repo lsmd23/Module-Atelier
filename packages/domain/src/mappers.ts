@@ -1,5 +1,6 @@
-import type { Document, Entity, Project, Relation, Revision } from "@module-atelier/contracts";
-import type { DocumentRow, EntityRow, ProjectRow, RelationRow, RevisionRow } from "@module-atelier/db";
+import type { AccountUser, Document, Entity, Project, Relation, Revision } from "@module-atelier/contracts";
+import { accountPlans, accountRoles, accountStatuses } from "@module-atelier/contracts";
+import type { DocumentRow, EntityRow, ProjectRow, RelationRow, RevisionRow, UserRow } from "@module-atelier/db";
 
 /**
  * Row -> contract mapping. This is the only place where persistence shapes turn
@@ -111,5 +112,28 @@ export function toEntitySnapshot(row: EntityRow): Record<string, unknown> {
     structuredData: entity.structuredData,
     revision: entity.revision,
     status: entity.status
+  };
+}
+
+/**
+ * The database constrains role/plan/status to the contract's values, so the
+ * fallbacks below only ever apply if that constraint is dropped by mistake.
+ */
+function asMemberOf<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
+  return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+export function toAccountUser(row: UserRow): AccountUser {
+  return {
+    id: row.id,
+    username: row.username,
+    email: row.email,
+    displayName: row.name,
+    role: asMemberOf(row.role, accountRoles, "author"),
+    emailVerified: row.emailVerified,
+    status: asMemberOf(row.status, accountStatuses, "active"),
+    plan: asMemberOf(row.plan, accountPlans, "free"),
+    createdAt: row.createdAt.toISOString(),
+    lastLoginAt: row.lastLoginAt === null ? null : row.lastLoginAt.toISOString()
   };
 }

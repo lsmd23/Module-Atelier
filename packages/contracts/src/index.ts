@@ -2,11 +2,13 @@
  * Public entry point of `@module-atelier/contracts`.
  *
  * - `./domain.ts` holds the cross-module domain model (single source of truth).
+ * - `./auth.ts` holds the account and session model.
  * - `./api.ts` holds the route-level request/response shapes for `/api`.
  *
- * Both are re-exported here so every consumer keeps importing the package root.
+ * All are re-exported here so every consumer keeps importing the package root.
  */
 export * from "./domain.ts";
+export * from "./auth.ts";
 export * from "./api.ts";
 
-export const contractVersion = "0.2.0" as const;
+export const contractVersion = "0.3.0" as const;

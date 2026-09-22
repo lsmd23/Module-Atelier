@@ -5,6 +5,7 @@ import { createDb } from "./client.ts";
 import type { DbClient } from "./client.ts";
 import { runMigrations } from "./migrate.ts";
 import { documents, entities, projects, relations, revisions } from "./schema.ts";
+import { accounts, sessions, users, verifications } from "./schema-auth.ts";
 
 /**
  * Test helpers. Kept in a separate entry point (`@module-atelier/db/testing`)
@@ -64,10 +65,10 @@ export async function prepareTestDatabase(connectionString: string): Promise<voi
   }
 }
 
-/** Empties every domain table. Migration bookkeeping is left untouched. */
+/** Empties every domain and auth table. Migration bookkeeping is left untouched. */
 export async function truncateAll(db: DbClient): Promise<void> {
   await db.execute(
-    sql`truncate table ${projects}, ${documents}, ${entities}, ${relations}, ${revisions} cascade`
+    sql`truncate table ${projects}, ${documents}, ${entities}, ${relations}, ${revisions}, ${users}, ${sessions}, ${accounts}, ${verifications} cascade`
   );
 }
 

@@ -37,14 +37,19 @@ function sameStrings(left: readonly string[], right: readonly string[]): boolean
 export function createEntityService(deps: { db: DbClient; actorId: string }) {
   const { db, actorId } = deps;
 
-  async function recordRevision(tx: DbTransaction, row: EntityRow, baseRevision: number): Promise<void> {
+  async function recordRevision(
+    tx: DbTransaction,
+    row: EntityRow,
+    baseRevision: number,
+    actor: string
+  ): Promise<void> {
     await tx.insert(revisions).values({
       projectId: row.projectId,
       resourceType: "entity",
       resourceId: row.id,
       revision: row.revision,
       baseRevision,
-      authorId: actorId,
+      authorId: actor,
       snapshot: toEntitySnapshot(row)
     });
   }
@@ -68,7 +73,12 @@ export function createEntityService(deps: { db: DbClient; actorId: string }) {
   }
 
   /** New entities default to `draft`: nothing becomes canon by accident. */
-  async function create(projectId: string, input: CreateEntityInput): Promise<Entity> {
+  /** `actorId` defaults to the identity the service was built with. */
+  async function create(
+    projectId: string,
+    input: CreateEntityInput,
+    actorId: string = deps.actorId
+  ): Promise<Entity> {
     return db.transaction(async (tx) => {
       await assertProjectExists(tx, projectId);
       const inserted = await tx
@@ -84,7 +94,7 @@ export function createEntityService(deps: { db: DbClient; actorId: string }) {
         })
         .returning();
       const row = requireRow(inserted, "entities insert");
-      await recordRevision(tx, row, 0);
+      await recordRevision(tx, row, 0, actorId);
       return toEntity(row);
     });
   }
@@ -94,7 +104,11 @@ export function createEntityService(deps: { db: DbClient; actorId: string }) {
    * check, revision row in the same transaction, and no revision bump when the
    * update does not change anything.
    */
-  async function update(entityId: string, input: UpdateEntityInput): Promise<Entity> {
+  async function update(
+    entityId: string,
+    input: UpdateEntityInput,
+    actorId: string = deps.actorId
+  ): Promise<Entity> {
     return db.transaction(async (tx) => {
       const found = await tx.select().from(entities).where(eq(entities.id, entityId)).for("update").limit(1);
       const row = found[0];
@@ -143,7 +157,7 @@ export function createEntityService(deps: { db: DbClient; actorId: string }) {
         .where(eq(entities.id, entityId))
         .returning();
       const next = requireRow(updated, "entities update");
-      await recordRevision(tx, next, row.revision);
+      await recordRevision(tx, next, row.revision, actorId);
       return toEntity(next);
     });
   }

@@ -9,9 +9,9 @@ import {
   updateEntityRequestSchema
 } from "@module-atelier/contracts";
 import { pageRequest, parseInput } from "../http.ts";
-import type { ApiServices } from "../types.ts";
+import type { ApiRouteDeps } from "../types.ts";
 
-export function registerEntityRoutes(app: FastifyInstance, services: ApiServices): void {
+export function registerEntityRoutes(app: FastifyInstance, services: ApiRouteDeps): void {
   app.get(apiRoutes.projectEntities, async (request) => {
     const params = parseInput(projectParamsSchema, request.params);
     const query = parseInput(pageQuerySchema, request.query);
@@ -21,6 +21,7 @@ export function registerEntityRoutes(app: FastifyInstance, services: ApiServices
   app.post(apiRoutes.projectEntities, async (request, reply) => {
     const params = parseInput(projectParamsSchema, request.params);
     const body = parseInput(createEntityRequestSchema, request.body);
+    const session = await services.sessionOf(request);
     const entity = await services.entities.create(params.projectId, {
       type: body.type,
       name: body.name,
@@ -28,7 +29,7 @@ export function registerEntityRoutes(app: FastifyInstance, services: ApiServices
       ...(body.description === undefined ? {} : { description: body.description }),
       ...(body.structuredData === undefined ? {} : { structuredData: body.structuredData }),
       ...(body.status === undefined ? {} : { status: body.status })
-    });
+    }, session?.userId);
     reply.code(201);
     return { data: entity };
   });
@@ -42,6 +43,7 @@ export function registerEntityRoutes(app: FastifyInstance, services: ApiServices
   app.patch(apiRoutes.entity, async (request) => {
     const params = parseInput(entityParamsSchema, request.params);
     const body = parseInput(updateEntityRequestSchema, request.body);
+    const session = await services.sessionOf(request);
     const entity = await services.entities.update(params.entityId, {
       baseRevision: body.baseRevision,
       ...(body.name === undefined ? {} : { name: body.name }),
@@ -49,7 +51,7 @@ export function registerEntityRoutes(app: FastifyInstance, services: ApiServices
       ...(body.description === undefined ? {} : { description: body.description }),
       ...(body.structuredData === undefined ? {} : { structuredData: body.structuredData }),
       ...(body.status === undefined ? {} : { status: body.status })
-    });
+    }, session?.userId);
     return { data: entity };
   });
 

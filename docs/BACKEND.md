@@ -84,10 +84,51 @@ curl http://127.0.0.1:3000/api/health
 | `API_PORT` | no | `3000` | Listener port |
 | `LOG_LEVEL` | no | `info` | pino level: `fatal`…`trace`, or `silent` |
 | `DEFAULT_ACTOR_ID` | no | `local-author` | `authorId` recorded on revisions until Better Auth exists |
+| `BETTER_AUTH_SECRET` | yes | – | Session signing secret, ≥32 chars (`openssl rand -base64 32`) |
+| `BETTER_AUTH_URL` | no | `http://127.0.0.1:3000` | Public API URL; decides the cookie `secure` flag and is always trusted |
+| `ALLOW_REGISTRATION` | no | `false` | Public sign-up; the first account is admitted either way |
+| `AUTH_TRUSTED_ORIGINS` | no | – | Comma-separated extra origins allowed to send cookies (the Vite dev server) |
+| `AUTH_DEV_EXPOSE_CODE` | no | `false` | Development only: return verification codes in the response |
 | `TEST_DATABASE_URL` | tests only | – | Test database; the name must end with `_test` |
 
 Invalid configuration fails fast with a readable message instead of starting a
 half-configured server.
+
+## Authentication
+
+`better-auth` owns password hashing, session tokens and OTP verification; the API
+exposes its own `/api/auth/*` routes on top of it (`apps/api/src/routes/auth.ts`)
+so every response keeps the `{ data }` / `{ error }` envelope and the contract's
+error codes. Better Auth's own HTTP handler is deliberately **not** mounted:
+one auth surface is easier to keep aligned with `packages/contracts`.
+
+How the two meet:
+
+- **Naming.** Tables are declared in `packages/db/src/schema-auth.ts` with
+  camelCase Drizzle properties and snake_case columns. Better Auth addresses
+  columns by property name and Drizzle translates, so the repository's snake_case
+  convention needs no field-mapping configuration. Model names are set to
+  `users`/`sessions`/`accounts`/`verifications` to match those exports.
+- **Identifiers.** `advanced.database.generateId` returns a UUID, matching every
+  other table.
+- **Plugins.** `username()` (login handle, derived from the email; the default
+  validator allows only `[a-zA-Z0-9_.]`) and `emailOTP()` with `otpLength: 6`,
+  `storeOTP: "hashed"`, `allowedAttempts: 3`, `disableSignUp: true` and
+  `overrideDefaultEmailVerification: true`, so a 6-digit code replaces the
+  verification link the UI expects.
+- **Verification signs in.** `emailVerification.autoSignInAfterVerification` is
+  on: a new account cannot send a password at that point, so confirming the code
+  opens the session.
+- **Rate limits** live in `apps/api/src/auth/rate-limit.ts`, because Better
+  Auth's limiter guards its own HTTP handler and these routes call `auth.api.*`
+  directly. Limits: 3 codes / address / minute, 10 sign-ins / address+IP /
+  minute, 3 reset requests / address / minute.
+
+**Known limitation:** there is no mail transport yet. Codes are written to the
+API log; with `AUTH_DEV_EXPOSE_CODE=true` they are also kept in memory and
+returned as `devCode`, which is what the tests and local frontend work use. A
+deployment must set that flag to `false` **and** add an SMTP transport before it
+can onboard users.
 
 ## Migrations
 
@@ -105,7 +146,7 @@ pnpm db:migrate      # applies everything not yet recorded in drizzle.__drizzle_
 `drizzle.__drizzle_migrations` and skipped on later runs. It is intentionally
 *not* run automatically by the API on boot — deployment order stays explicit.
 
-Migrations must contain every invariant the application relies on. The M0
+Migrations must contain every invariant the application relies on. The domain
 schema carries: UUID primary keys, `timestamptz` columns, `CHECK` constraints on
 revision numbers and JSONB shape, `UNIQUE` constraints on revision identity and
 relation edges, and composite foreign keys that make cross-project relations
@@ -152,9 +193,14 @@ reach clients.
 
 ## Known gaps (deliberate, see the BE-001 handoff)
 
-- **No authentication or authorization.** Single-tenant M0: every request acts
-  as `DEFAULT_ACTOR_ID`. Project scoping is structural (foreign keys, project
-  checks) but there is no user boundary yet.
+- **Project routes are not yet role-guarded.** Accounts, sessions and OTP
+  verification exist (BE-002 phase 1), and writes are attributed to the
+  signed-in user when a session is present, but a request without a session is
+  still served and attributed to `DEFAULT_ACTOR_ID`. Making a session mandatory
+  and enforcing project roles is phase 2, which is also when `FORBIDDEN` starts
+  being produced.
+- **No mail transport.** See the Authentication section: verification codes only
+  reach the log or the developer-facing `devCode` field.
 - **No CORS.** In development the frontend should proxy `/api` to
   `http://127.0.0.1:3000` (Vite `server.proxy`), which keeps the API
   same-origin and avoids a wildcard CORS policy.

@@ -14,10 +14,13 @@
     "migrate": "node --env-file-if-exists=../../.env src/migrate-cli.ts"
   },
   "dependencies": {
+    "@module-atelier/contracts": "workspace:*",
+    "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.23.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.9.2",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.10",

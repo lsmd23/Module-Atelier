@@ -14,3 +14,7 @@
 - 2026-09-20: Verification codes are 6-digit, single-use, hashed at rest, and confirming one signs the new account in (no password is available at that point).
 - 2026-09-20: Public registration is closed by default; the first account bootstraps the instance, and a duplicate registration answers exactly like a new one so accounts cannot be enumerated.
 - 2026-09-20: Rate limits for auth routes are enforced in this API, because Better Auth's limiter only guards its own HTTP handler.
+- 2026-09-21: The product is a locally installed, all-in-one application (FoundryVTT shape), not a deployed server: one process on 127.0.0.1, no external database, data in a self-contained user data directory, backup by copying that directory. See `docs/STORAGE.md`.
+- 2026-09-21: Storage moves from PostgreSQL to SQLite with one database per project (`data/projects/<id>/project.db` plus its `assets/` folder), and an app-level `app.db` for accounts, sessions, settings and a rebuildable project index. Per-project files make cross-project integrity structural and keep project copy/export a file operation.
+- 2026-09-21: Assets stay as plain files inside the project directory with metadata in the database, instead of the earlier BLOB plan; the reference application behaves this way and project databases stay small.
+- 2026-09-21: Email verification is kept (a service mailbox will be provided); the mail transport gains SMTP configuration, and email remains a real account field rather than becoming optional-only.

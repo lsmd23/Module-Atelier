@@ -14,4 +14,4 @@ schema, migrations, driver errors). Nothing above `packages/db` imports
 `@module-atelier/db` tables except `packages/domain`, and no other module sees
 row shapes. See `docs/BACKEND.md`.
 
-Persistence is PostgreSQL/Drizzle; background jobs use pg-boss. The first milestone is M0 Foundation, followed by M1 Core Authoring.
+Persistence: the product is local-first, so storage is SQLite (one database per project) via Drizzle — see `docs/STORAGE.md`, which supersedes the PostgreSQL assumptions below. Background jobs use pg-boss. The first milestone is M0 Foundation, followed by M1 Core Authoring.

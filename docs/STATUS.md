@@ -2,6 +2,8 @@
 
 Current Milestone: **M0 — Foundation**
 
+Architecture note: the product is a locally installed, all-in-one application (FoundryVTT shape). Storage design of record: `docs/STORAGE.md`; the storage switch is BE-003 and follows the merged BE-002 phase 1.
+
 Completed:
 - Empty repository assessed; no prior code, docs, or AGENTS.md found.
 - pnpm workspace and strict TypeScript root configuration created.
@@ -12,7 +14,7 @@ Completed:
 - BE-002 accounts delivered and revised: Better Auth behind our own `/api/auth/*` routes, with local accounts (first-run owner setup, username sign-in, no email verification) per contract 0.4.0; auth tables in `packages/db/src/schema-auth.ts` and rate limits enforced in the API.
 
 In Progress:
-- BE-002 phase 2 (project ownership, members, role enforcement) is next; phases 3-5 cover the document tree, the asset store and frontend wiring.
+- BE-003 (storage switch to SQLite, per-project databases, data directory) is next, then BE-002 phase 2 (first-run owner setup, local users, ownership and role enforcement).
 - Publishing technical spike (PUB-001) completed locally; shared PublishSnapshot/Module IR contract remains under review.
 
 Blocked:
@@ -25,6 +27,8 @@ Important Contract Changes:
 - v0.2.0 (additive): `packages/contracts/src/api.ts` with envelopes, error codes, request/response schemas, route paths and input limits. Domain types moved verbatim to `src/domain.ts`; `src/index.ts` is now a re-export barrel. No v0.1.0 type changed.
 
 Integration Risks:
+- Storage architecture is changing: PostgreSQL is being replaced by SQLite with one database per project (`docs/STORAGE.md`). Until BE-003 lands, the merged PostgreSQL schema and migration remain the running system.
+- `infra/docker-compose.yml` describes a server deployment that no longer matches the product shape (Platform/QA ownership; flagged, not removed).
 - Project routes are not yet role-guarded (BE-002 phase 2): a request without a session is still served and attributed to `DEFAULT_ACTOR_ID`, so the API must not be exposed publicly until phase 2 lands.
 - No mail transport: verification codes reach the API log, or the response when `AUTH_DEV_EXPOSE_CODE` is on (development only).
 - Entity and relation payloads carry no timestamps (contract gap, proposed as CCR-1).

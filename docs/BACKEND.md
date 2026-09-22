@@ -3,6 +3,10 @@
 M0 backend for Module Atelier: Fastify REST API, Drizzle persistence on
 PostgreSQL, domain services that own revision semantics. Delivered by BE-001.
 
+> **Storage is changing.** `docs/STORAGE.md` describes the local-first target
+> (SQLite, one database per project, user data directory). Until BE-003 lands,
+> this document still describes the running PostgreSQL deployment accurately.
+
 ## Prerequisites
 
 | Requirement | Version | Notes |

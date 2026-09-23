@@ -134,12 +134,22 @@ function DevMenu() {
   );
 }
 
-export function TopBar({ saveState, pendingCount }: { saveState: SaveState; pendingCount: number }) {
+export function TopBar({
+  saveState,
+  pendingCount,
+  projectName
+}: {
+  saveState: SaveState;
+  pendingCount: number;
+  projectName: string;
+}) {
   const viewMode = useUiStore((s) => s.viewMode);
   const setViewMode = useUiStore((s) => s.setViewMode);
   const openContext = useUiStore((s) => s.openContext);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const toggleContext = useUiStore((s) => s.toggleContext);
+  const closeProject = useUiStore((s) => s.closeProject);
+  const hasOpenDocument = useUiStore((s) => s.currentDocumentId) !== "";
 
   return (
     <header className="flex h-12 items-center gap-3 border-b border-hairline bg-parchment px-3">
@@ -152,8 +162,15 @@ export function TopBar({ saveState, pendingCount }: { saveState: SaveState; pend
         ☰
       </button>
       <div className="flex min-w-0 items-baseline gap-2">
-        <span className="whitespace-nowrap text-sm font-semibold tracking-wide text-oxblood">❦ Module Atelier</span>
-        <span className="truncate text-sm text-ink-soft">雾锁矿脉</span>
+        <button
+          type="button"
+          onClick={closeProject}
+          className="whitespace-nowrap text-sm font-semibold tracking-wide text-oxblood hover:underline"
+          title="返回项目库"
+        >
+          ❦ Module Atelier
+        </button>
+        <span className="truncate text-sm text-ink-soft">{projectName}</span>
       </div>
 
       <div
@@ -177,7 +194,8 @@ export function TopBar({ saveState, pendingCount }: { saveState: SaveState; pend
         ))}
       </div>
 
-      <SaveChip state={saveState} />
+      {/* 没有打开文档时不显示保存状态（无内容可保存） */}
+      {hasOpenDocument && <SaveChip state={saveState} />}
 
       <button
         type="button"

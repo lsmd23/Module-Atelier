@@ -65,16 +65,14 @@ export function AccountPopover() {
             </span>
             <div className="min-w-0 text-sm">
               <p className="truncate font-semibold">{user.displayName}</p>
-              <p className="truncate text-xs text-ink-faint">{user.email}</p>
+              <p className="truncate text-xs text-ink-faint">@{user.username}</p>
             </div>
           </div>
 
           <dl className="mt-3 space-y-1 border-t border-hairline pt-2 text-xs">
             <div className="flex gap-2">
-              <dt className="w-16 shrink-0 text-ink-faint">邮箱验证</dt>
-              <dd className={user.emailVerified ? "text-forest" : "text-oxblood"}>
-                {user.emailVerified ? "已验证" : "未验证"}
-              </dd>
+              <dt className="w-16 shrink-0 text-ink-faint">账户类型</dt>
+              <dd className="text-ink-soft">本机账户</dd>
             </div>
             <div className="flex gap-2">
               <dt className="w-16 shrink-0 text-ink-faint">角色</dt>
@@ -106,7 +104,7 @@ export function AccountPopover() {
           </div>
 
           <p className="mt-2 border-t border-hairline pt-2 text-[10px] leading-relaxed text-ink-faint">
-            MOCK ONLY —— auth 契约未冻结（M0 单租户），会话为演示实现。
+            本地账户（契约 0.4.0）：数据保存在本机数据目录，无需联网。
           </p>
         </div>
       )}

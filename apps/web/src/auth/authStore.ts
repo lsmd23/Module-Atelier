@@ -1,21 +1,21 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { AccountUser } from "../api/types";
+import type { AccountUser } from "@module-atelier/contracts";
+import { api } from "../api";
 
 /**
- * 会话状态（MOCK ONLY 数据源）。
- * guest → 未登录；pendingVerification → 已注册待邮箱验证；authenticated → 已进入工作台。
+ * 会话状态（本地账户，contracts 0.4.0）。
+ * loading → 启动时检查 setup-status；needsSetup → 首次运行，创建管理者；
+ * guest → 未登录；authenticated → 已进入。
  */
-export type AuthStatus = "guest" | "pendingVerification" | "authenticated";
+export type AuthStatus = "loading" | "needsSetup" | "guest" | "authenticated";
 
 interface AuthState {
   status: AuthStatus;
   user: AccountUser | null;
-  /** 注册后等待验证的邮箱 */
-  pendingEmail: string | null;
 
+  setStatus(status: AuthStatus): void;
   setAuthenticated(user: AccountUser): void;
-  setPendingVerification(email: string): void;
   setUser(user: AccountUser): void;
   signOut(): void;
 }
@@ -23,15 +23,37 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      status: "guest",
+      status: "loading",
       user: null,
-      pendingEmail: null,
 
-      setAuthenticated: (user) => set({ status: "authenticated", user, pendingEmail: null }),
-      setPendingVerification: (pendingEmail) => set({ status: "pendingVerification", pendingEmail }),
+      setStatus: (status) => set({ status }),
+      setAuthenticated: (user) => set({ status: "authenticated", user }),
       setUser: (user) => set({ user }),
-      signOut: () => set({ status: "guest", user: null, pendingEmail: null })
+      signOut: () => set({ status: "guest", user: null })
     }),
-    { name: "module-atelier-auth" }
+    {
+      name: "module-atelier-auth",
+      // status 不持久化（每次启动以服务端 setup-status 为准），只记住用户概要
+      partialize: (s) => ({ user: s.user })
+    }
   )
 );
+
+/**
+ * 启动引导：首次运行 → needsSetup；已有账户 → 尝试恢复会话（me()），
+ * 失败则回到登录。离线/未启动后端时落入 guest（mock 下总能恢复）。
+ */
+export async function bootstrapAuth(): Promise<void> {
+  const { setStatus, setAuthenticated } = useAuthStore.getState();
+  try {
+    const { needsSetup } = await api.getSetupStatus();
+    if (needsSetup) {
+      setStatus("needsSetup");
+      return;
+    }
+    const user = await api.me();
+    setAuthenticated(user);
+  } catch {
+    setStatus("guest");
+  }
+}

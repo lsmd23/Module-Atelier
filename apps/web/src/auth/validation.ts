@@ -1,13 +1,8 @@
 /**
- * 认证表单校验（纯函数，供单元测试）。
- * 规则与常见商用惯例对齐；服务端侧的权威校验待 auth 契约冻结。
+ * 本地账户表单校验（纯函数，供单元测试）。
+ * 与 contracts 0.4.0 对齐：username 3–24，password 8–128，displayName 1–50。
+ * 本地优先形态：无邮箱验证、无服务条款勾选。
  */
-
-export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-export function isValidEmail(email: string): boolean {
-  return EMAIL_RE.test(email.trim()) && email.length <= 254;
-}
 
 export type PasswordStrength = 0 | 1 | 2 | 3 | 4;
 
@@ -24,39 +19,42 @@ export function passwordStrength(pw: string): PasswordStrength {
 
 export const passwordStrengthLabel = ["过短", "弱", "中", "强", "很强"] as const;
 
-export function isValidVerificationCode(code: string): boolean {
-  return /^\d{6}$/.test(code.trim());
+export function isValidUsername(username: string): boolean {
+  const u = username.trim();
+  return u.length >= 3 && u.length <= 24;
 }
 
-export interface RegisterInput {
+export interface SetupInput {
   displayName: string;
-  email: string;
+  username: string;
   password: string;
   confirmPassword: string;
-  acceptedTerms: boolean;
 }
 
-export type FieldErrors = Partial<Record<"displayName" | "email" | "password" | "confirmPassword" | "acceptedTerms", string>>;
+export type SetupErrors = Partial<
+  Record<"displayName" | "username" | "password" | "confirmPassword", string>
+>;
 
-export function validateRegister(input: RegisterInput): FieldErrors {
-  const errors: FieldErrors = {};
+/** 首次运行：创建本机管理者账户。 */
+export function validateSetup(input: SetupInput): SetupErrors {
+  const errors: SetupErrors = {};
   const name = input.displayName.trim();
   if (name.length === 0) errors.displayName = "请填写显示名称";
   else if (name.length > 50) errors.displayName = "显示名称最长 50 字";
 
-  if (!isValidEmail(input.email)) errors.email = "邮箱格式不正确";
+  if (!isValidUsername(input.username)) errors.username = "用户名需为 3–24 个字符";
 
   if (passwordStrength(input.password) < 2) errors.password = "密码至少 8 位，建议混合大小写与数字";
+  else if (input.password.length > 128) errors.password = "密码最长 128 位";
   if (input.confirmPassword !== input.password) errors.confirmPassword = "两次输入的密码不一致";
-  if (!input.acceptedTerms) errors.acceptedTerms = "请先同意服务条款与隐私政策";
   return errors;
 }
 
-export type LoginErrors = Partial<Record<"email" | "password", string>>;
+export type LoginErrors = Partial<Record<"username" | "password", string>>;
 
-export function validateLogin(email: string, password: string): LoginErrors {
+export function validateLogin(username: string, password: string): LoginErrors {
   const errors: LoginErrors = {};
-  if (!isValidEmail(email)) errors.email = "邮箱格式不正确";
+  if (username.trim().length === 0) errors.username = "请输入用户名";
   if (password.length === 0) errors.password = "请输入密码";
   return errors;
 }

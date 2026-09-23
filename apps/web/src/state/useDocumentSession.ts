@@ -62,7 +62,8 @@ export function useDocumentSession(documentId: string, opts?: { autosaveDelayMs?
 
   const query = useQuery({
     queryKey: ["document", documentId],
-    queryFn: () => api.getDocument(documentId)
+    queryFn: () => api.getDocument(documentId),
+    enabled: documentId !== ""
   });
 
   // 文档加载后：与服务端快照比对本地草稿

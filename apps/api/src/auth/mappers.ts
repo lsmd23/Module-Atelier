@@ -1,5 +1,6 @@
 import type { AccountPlan, AccountRole, AccountStatus, AccountSession, AccountUser } from "@module-atelier/contracts";
 import { accountPlans, accountRoles, accountStatuses } from "@module-atelier/contracts";
+import { isPlaceholderEmail } from "@module-atelier/domain";
 import type { AuthUserShape } from "./auth.ts";
 
 /**
@@ -37,7 +38,7 @@ export function toAccountUser(user: AuthUserShape): AccountUser {
   return {
     id: user.id,
     username: user.username ?? user.email.split("@")[0] ?? user.id,
-    email: user.email,
+    email: isPlaceholderEmail(user.email) ? null : user.email,
     displayName: user.name,
     role: asMemberOf<AccountRole>(user.role, accountRoles, "author"),
     emailVerified: user.emailVerified,

@@ -4,49 +4,42 @@ import {
   changePasswordRequestSchema,
   loginRequestSchema,
   pageQuerySchema,
-  passwordResetConfirmSchema,
-  passwordResetRequestSchema,
-  registerRequestSchema,
   sessionParamsSchema,
-  updateProfileRequestSchema,
-  verificationCodeRequestSchema,
-  verifyEmailRequestSchema
+  setupRequestSchema,
+  updateProfileRequestSchema
 } from "@module-atelier/contracts";
 import type { AccountSession } from "@module-atelier/contracts";
-import { countUsers, touchLastLogin } from "@module-atelier/domain";
+import type { DbClient } from "@module-atelier/db";
+import { countUsers, placeholderEmail, touchLastLogin } from "@module-atelier/domain";
+import type { PageRequest } from "@module-atelier/domain";
 import type { Auth, SessionContext } from "../auth/auth.ts";
-import { readSession, toWebHeaders, verificationCodeLifetimeSeconds } from "../auth/auth.ts";
-import { isAuthApiError, mapAuthError } from "../auth/errors.ts";
+import { readSession, toWebHeaders } from "../auth/auth.ts";
+import { authErrorStatusCode, isAuthApiError, mapAuthError } from "../auth/errors.ts";
 import { toAccountSession, toAccountUser } from "../auth/mappers.ts";
-import type { Mailer } from "../auth/mailer.ts";
 import { createAuthRateLimiters } from "../auth/rate-limit.ts";
 import type { AuthRateLimiters } from "../auth/rate-limit.ts";
-import { uniqueUsername, usernameFromEmail } from "../auth/username.ts";
 import { AuthFailureError, pageRequest, parseInput, unauthenticated } from "../http.ts";
-import type { PageRequest } from "@module-atelier/domain";
-import type { DbClient } from "@module-atelier/db";
 
 /**
- * `/api/auth/*` on top of Better Auth.
+ * `/api/auth/*` for a locally installed application.
  *
- * Better Auth owns hashing, session tokens and OTP state; these routes own the
- * transport: contract validation, the `{ data }` / `{ error }` envelope, the
- * contract's error codes, and forwarding session cookies. Better Auth's own
- * HTTP endpoints are deliberately not mounted, so there is exactly one auth
- * surface to keep in sync with the contract.
+ * There is no email channel: the first run creates the owner, that account
+ * signs in with its username, and further accounts are created by the owner on
+ * this machine. Better Auth still owns password hashing and session tokens;
+ * these routes own the transport, the envelope and the contract's error codes.
+ *
+ * Better Auth requires a unique email on its user model, so an account created
+ * without one stores a placeholder address under the reserved `.invalid` domain
+ * and the API reports `email: null` for it.
  */
 
 export type AuthRouteDeps = {
   auth: Auth;
   db: DbClient;
-  mailer: Mailer;
-  allowRegistration: boolean;
-  exposeVerificationCode: boolean;
   /** Defaults to a fresh in-process set; tests may share or replace it. */
   rateLimiters?: AuthRateLimiters;
 };
 
-/** 429 in the contract's vocabulary. */
 function enforceRateLimit(limiter: AuthRateLimiters["login"], key: string): void {
   const decision = limiter.consume(key.toLowerCase());
   if (!decision.allowed) {
@@ -57,14 +50,25 @@ function enforceRateLimit(limiter: AuthRateLimiters["login"], key: string): void
   }
 }
 
-/** Runs a Better Auth call and translates its failures into contract errors. */
-async function runAuth<T>(operation: () => Promise<T>): Promise<T> {
+/**
+ * Runs a Better Auth call and translates its failures into contract errors.
+ * `unauthorized` lets a route name what a 401 means in its own context: for
+ * sign-in it is a wrong username or password, not a missing session.
+ */
+async function runAuth<T>(operation: () => Promise<T>, options: { unauthorized?: string } = {}): Promise<T> {
   try {
     return await operation();
   } catch (error) {
     const mapped = mapAuthError(error);
     if (mapped !== undefined) {
       throw new AuthFailureError(mapped);
+    }
+    const status = authErrorStatusCode(error);
+    if (options.unauthorized !== undefined && (status === 401 || status === 403)) {
+      throw new AuthFailureError({
+        code: options.unauthorized as never,
+        message: "the username or password is incorrect"
+      });
     }
     if (isAuthApiError(error)) {
       throw new AuthFailureError({ code: "DOMAIN_CONSTRAINT", message: "the authentication request was rejected" });
@@ -73,7 +77,6 @@ async function runAuth<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Session cookies Better Auth wants to set, copied onto our reply. */
 function forwardCookies(headers: Headers | undefined, reply: FastifyReply): string[] {
   if (headers === undefined) {
     return [];
@@ -85,7 +88,6 @@ function forwardCookies(headers: Headers | undefined, reply: FastifyReply): stri
   return cookies;
 }
 
-/** `cookie: a=b; c=d` built from a response's Set-Cookie headers, for follow-up reads. */
 function cookieHeaderFrom(cookies: readonly string[]): string | undefined {
   const pairs = cookies.map((cookie) => cookie.split(";")[0] ?? "").filter((pair) => pair.length > 0);
   return pairs.length === 0 ? undefined : pairs.join("; ");
@@ -115,34 +117,54 @@ async function requireSession(deps: AuthRouteDeps, request: FastifyRequest): Pro
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   const limiters = deps.rateLimiters ?? createAuthRateLimiters();
 
-  app.post(apiRoutes.authRegister, async (request, reply) => {
-    const body = parseInput(registerRequestSchema, request.body);
+  /** The first-run wizard asks this before it decides to show itself. */
+  app.get(apiRoutes.authSetupStatus, async () => {
+    const users = await countUsers(deps.db);
+    return { data: { needsSetup: users === 0 } };
+  });
 
-    // Public sign-up is off by default; the very first account bootstraps the instance.
+  app.post(apiRoutes.authSetup, async (request, reply) => {
+    const body = parseInput(setupRequestSchema, request.body);
+
     const existingUsers = await countUsers(deps.db);
-    if (!deps.allowRegistration && existingUsers > 0) {
-      throw new AuthFailureError({ code: "REGISTRATION_DISABLED", message: "public sign-up is disabled" });
+    if (existingUsers > 0) {
+      // One installation, one owner: this port closes once it exists.
+      throw new AuthFailureError({
+        code: "REGISTRATION_DISABLED",
+        message: "this installation already has an owner"
+      });
     }
 
-    const username = await uniqueUsername(deps.auth, usernameFromEmail(body.email));
-    await runAuth(() =>
+    const email =
+      body.email === undefined || body.email.length === 0 ? placeholderEmail(body.username) : body.email;
+    const created = await runAuth(() =>
       deps.auth.api.signUpEmail({
-        body: { email: body.email, password: body.password, name: body.displayName, username }
+        body: { email, password: body.password, name: body.displayName, username: body.username },
+        returnHeaders: true
       })
     );
 
-    // Better Auth answers generically when the address already exists, on
-    // purpose: a duplicate registration must not reveal that the account is
-    // there. The client therefore always continues to the code screen.
+    const cookies = forwardCookies(created.headers, reply);
+    const session = await readSessionWith(deps.auth, request, cookieHeaderFrom(cookies));
+    if (session === null) {
+      return { data: { session: null } };
+    }
+    await touchLastLogin(deps.db, session.userId);
     reply.code(201);
-    return { data: { session: null, requiresVerification: true } };
+    return { data: { session: { user: toAccountUser(session.user), sessionId: session.sessionId } } };
   });
 
   app.post(apiRoutes.authLogin, async (request, reply) => {
     const body = parseInput(loginRequestSchema, request.body);
-    enforceRateLimit(limiters.login, `${request.ip}|${body.email}`);
-    const result = await runAuth(() =>
-      deps.auth.api.signInEmail({ body: { email: body.email, password: body.password }, returnHeaders: true })
+    enforceRateLimit(limiters.login, `${request.ip}|${body.username}`);
+
+    const result = await runAuth(
+      () =>
+        deps.auth.api.signInUsername({
+          body: { username: body.username, password: body.password },
+          returnHeaders: true
+        }),
+      { unauthorized: "INVALID_CREDENTIALS" }
     );
     const cookies = forwardCookies(result.headers, reply);
 
@@ -151,43 +173,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       throw unauthenticated();
     }
     await touchLastLogin(deps.db, session.userId);
-    return {
-      data: { session: { user: toAccountUser(session.user), sessionId: session.sessionId } }
-    };
-  });
-
-  app.post(apiRoutes.authVerificationCode, async (request) => {
-    const body = parseInput(verificationCodeRequestSchema, request.body);
-    enforceRateLimit(limiters.verificationCode, body.email);
-    await runAuth(() =>
-      deps.auth.api.sendVerificationOTP({ body: { email: body.email, type: "email-verification" } })
-    );
-    const devCode = deps.exposeVerificationCode ? deps.mailer.peekLastCode(body.email) : undefined;
-    return {
-      data: {
-        delivered: true as const,
-        expiresInSeconds: verificationCodeLifetimeSeconds,
-        ...(devCode === undefined ? {} : { devCode })
-      }
-    };
-  });
-
-  app.post(apiRoutes.authVerifyEmail, async (request, reply) => {
-    const body = parseInput(verifyEmailRequestSchema, request.body);
-    const result = await runAuth(() =>
-      deps.auth.api.verifyEmailOTP({ body: { email: body.email, otp: body.code }, returnHeaders: true })
-    );
-    const cookies = forwardCookies(result.headers, reply);
-
-    // Verifying is what signs a new account in (autoSignInAfterVerification).
-    const session = await readSessionWith(deps.auth, request, cookieHeaderFrom(cookies));
-    if (session === null) {
-      return { data: { session: null } };
-    }
-    await touchLastLogin(deps.db, session.userId);
-    return {
-      data: { session: { user: toAccountUser(session.user), sessionId: session.sessionId } }
-    };
+    return { data: { session: { user: toAccountUser(session.user), sessionId: session.sessionId } } };
   });
 
   app.post(apiRoutes.authLogout, async (request, reply) => {
@@ -243,37 +229,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     return { data: { updated: true as const } };
   });
 
-  app.post(apiRoutes.authPasswordResetRequest, async (request) => {
-    const body = parseInput(passwordResetRequestSchema, request.body);
-    enforceRateLimit(limiters.passwordReset, body.email);
-    await runAuth(() => deps.auth.api.forgetPasswordEmailOTP({ body: { email: body.email } }));
-    const devCode = deps.exposeVerificationCode ? deps.mailer.peekLastCode(body.email) : undefined;
-    return {
-      data: {
-        delivered: true as const,
-        expiresInSeconds: verificationCodeLifetimeSeconds,
-        ...(devCode === undefined ? {} : { devCode })
-      }
-    };
-  });
-
-  app.post(apiRoutes.authPasswordResetConfirm, async (request) => {
-    const body = parseInput(passwordResetConfirmSchema, request.body);
-    await runAuth(() =>
-      deps.auth.api.resetPasswordEmailOTP({
-        body: { email: body.email, otp: body.code, password: body.newPassword }
-      })
-    );
-    return { data: { updated: true as const } };
-  });
-
   app.get(apiRoutes.authSessions, async (request) => {
     const session = await requireSession(deps, request);
     const query = parseInput(pageQuerySchema, request.query);
     const page: PageRequest = pageRequest(query);
-    const sessions = await runAuth(() =>
-      deps.auth.api.listSessions({ headers: toWebHeaders(request.headers) })
-    );
+    const sessions = await runAuth(() => deps.auth.api.listSessions({ headers: toWebHeaders(request.headers) }));
     const items: AccountSession[] = sessions.map((entry) => toAccountSession(entry, session.sessionId));
     const slice = items.slice(page.offset, page.offset + page.limit);
     return {
@@ -289,9 +249,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   app.delete(apiRoutes.authSession, async (request, reply) => {
     await requireSession(deps, request);
     const params = parseInput(sessionParamsSchema, request.params);
-    const sessions = await runAuth(() =>
-      deps.auth.api.listSessions({ headers: toWebHeaders(request.headers) })
-    );
+    const sessions = await runAuth(() => deps.auth.api.listSessions({ headers: toWebHeaders(request.headers) }));
     const target = sessions.find((entry) => entry.id === params.sessionId);
     if (target === undefined) {
       throw new AuthFailureError({ code: "NOT_FOUND", message: "session not found" });
@@ -304,7 +262,6 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         returnHeaders: true
       })
     );
-    // Revoking the current session clears its cookie; forward that too.
     forwardCookies(result.headers, reply);
     return { data: { id: params.sessionId } };
   });

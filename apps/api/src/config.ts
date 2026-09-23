@@ -20,10 +20,6 @@ export const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32, "must be at least 32 characters (openssl rand -base64 32)"),
   /** Public base URL of this API; decides cookie `secure` and trusted origins. */
   BETTER_AUTH_URL: z.string().url().default("http://127.0.0.1:3000"),
-  /** Public sign-up. Off by default; the first account is always admitted. */
-  ALLOW_REGISTRATION: booleanFlag("false"),
-  /** Development aid: returns the verification code in the API response. */
-  AUTH_DEV_EXPOSE_CODE: booleanFlag("false"),
   /**
    * Extra origins allowed to call the API with cookies (CSRF protection).
    * The frontend dev server is a different origin even when it proxies /api.
@@ -48,8 +44,6 @@ export type ApiConfig = {
   actorId: string;
 authSecret: string;
   authBaseUrl: string;
-  allowRegistration: boolean;
-  exposeVerificationCode: boolean;
   trustedOrigins: string[];
 };
 
@@ -70,8 +64,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): ApiConfig {
     actorId: parsed.data.DEFAULT_ACTOR_ID,
     authSecret: parsed.data.BETTER_AUTH_SECRET,
     authBaseUrl: parsed.data.BETTER_AUTH_URL,
-    allowRegistration: parsed.data.ALLOW_REGISTRATION,
-    exposeVerificationCode: parsed.data.AUTH_DEV_EXPOSE_CODE,
     trustedOrigins: [...new Set(trustedOrigins)]
   };
 }

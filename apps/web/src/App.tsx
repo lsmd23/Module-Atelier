@@ -27,9 +27,16 @@ import { Launcher } from "./launcher/Launcher";
 
 export default function App() {
   const currentProjectId = useUiStore((s) => s.currentProjectId);
-  // 未打开项目 → 启动器（项目库）。工作台的全部数据流以项目为作用域。
-  if (!currentProjectId) return <Launcher />;
-  return <Workspace projectId={currentProjectId} />;
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
+  const accountOpen = useUiStore((s) => s.accountOpen);
+  // 未打开项目 → 启动器（项目库）。设置/账户对话框是全局的，两层都能打开。
+  return (
+    <>
+      {currentProjectId ? <Workspace projectId={currentProjectId} /> : <Launcher />}
+      {settingsOpen && <SettingsDialog />}
+      {accountOpen && <AccountDialog />}
+    </>
+  );
 }
 
 function Workspace({ projectId }: { projectId: string }) {
@@ -44,8 +51,6 @@ function Workspace({ projectId }: { projectId: string }) {
   const setReviewingSuggestion = useUiStore((s) => s.setReviewingSuggestion);
   const selectEntity = useUiStore((s) => s.selectEntity);
   const interventionMode = useUiStore((s) => s.interventionMode);
-  const settingsOpen = useUiStore((s) => s.settingsOpen);
-  const accountOpen = useUiStore((s) => s.accountOpen);
   const editorFontSize = useUiStore((s) => s.editorFontSize);
   const autosaveDelayMs = useUiStore((s) => s.autosaveDelayMs);
 
@@ -382,9 +387,6 @@ function Workspace({ projectId }: { projectId: string }) {
 
       {session.recovery && <RestoreDraftDialog decision={session.recovery} onResolve={session.resolveRecovery} />}
 
-      {settingsOpen && <SettingsDialog />}
-
-      {accountOpen && <AccountDialog />}
 
       {createEntityDraft && (
         <CreateEntityDialog

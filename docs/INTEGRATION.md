@@ -26,14 +26,14 @@ What the frontend must provide or know:
 - **`baseRevision` on every document/entity PATCH**, and handling of 409
   `CONFLICT` using `error.details.conflict` (`expectedRevision`,
   `actualRevision`) for merge/reload UX.
-- **Authentication is live** (`/api/auth/*`, contract 0.3.0). Sessions are
-  httpOnly cookies, so requests must send credentials and the client must treat
-  401 `UNAUTHENTICATED` as signed out and clear its local auth state. The
-  frontend currently talks to a mock: its nine auth methods map onto the
-  documented routes, and wiring them plus the dev proxy is BE-002 phase 5.
+- **Authentication is live, and it is local** (`/api/auth/*`, contract 0.4.0).
+  The frontend's `AuthScreen`/`AccountDialog` still speak to a mock whose shape
+  no longer matches: sign-in is by `username`, there is no verification screen,
+  and the first run must call `GET /api/auth/setup-status` and then
+  `POST /api/auth/setup` instead of registering. Sessions are httpOnly cookies,
+  so requests send credentials and a 401 must clear local auth state.
 - **Errors the auth UI should branch on**: `INVALID_CREDENTIALS`,
-  `EMAIL_NOT_VERIFIED`, `INVALID_CODE`, `WEAK_PASSWORD`,
-  `REGISTRATION_DISABLED`, `RATE_LIMITED`.
+  `WEAK_PASSWORD`, `REGISTRATION_DISABLED`, `RATE_LIMITED`.
 - **Project routes are not role-guarded yet** (phase 2): being signed in does
   not yet imply access control, so do not rely on the API to hide other
   projects' data.

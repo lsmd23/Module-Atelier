@@ -96,39 +96,35 @@ half-configured server.
 
 ## Authentication
 
-`better-auth` owns password hashing, session tokens and OTP verification; the API
-exposes its own `/api/auth/*` routes on top of it (`apps/api/src/routes/auth.ts`)
-so every response keeps the `{ data }` / `{ error }` envelope and the contract's
-error codes. Better Auth's own HTTP handler is deliberately **not** mounted:
-one auth surface is easier to keep aligned with `packages/contracts`.
+`better-auth` owns password hashing and session tokens; the API exposes its own
+`/api/auth/*` routes on top of it (`apps/api/src/routes/auth.ts`) so every
+response keeps the `{ data }` / `{ error }` envelope and the contract's error
+codes. Better Auth's own HTTP handler is deliberately not mounted: one auth
+surface is easier to keep aligned with `packages/contracts`.
 
-How the two meet:
+**Accounts are local.** The first run creates the owner
+(`POST /api/auth/setup`, refused afterwards with `REGISTRATION_DISABLED`), that
+account signs in with its username, and nothing is ever emailed — there is no
+verification step and no reset-by-mail flow. Further accounts are created by the
+owner on this machine (BE-002 phase 2).
 
 - **Naming.** Tables are declared in `packages/db/src/schema-auth.ts` with
-  camelCase Drizzle properties and snake_case columns. Better Auth addresses
-  columns by property name and Drizzle translates, so the repository's snake_case
-  convention needs no field-mapping configuration. Model names are set to
-  `users`/`sessions`/`accounts`/`verifications` to match those exports.
+  camelCase Drizzle properties and snake_case columns; Better Auth addresses
+  columns by property name and Drizzle translates, so the repository convention
+  needs no field-mapping configuration.
 - **Identifiers.** `advanced.database.generateId` returns a UUID, matching every
   other table.
-- **Plugins.** `username()` (login handle, derived from the email; the default
-  validator allows only `[a-zA-Z0-9_.]`) and `emailOTP()` with `otpLength: 6`,
-  `storeOTP: "hashed"`, `allowedAttempts: 3`, `disableSignUp: true` and
-  `overrideDefaultEmailVerification: true`, so a 6-digit code replaces the
-  verification link the UI expects.
-- **Verification signs in.** `emailVerification.autoSignInAfterVerification` is
-  on: a new account cannot send a password at that point, so confirming the code
-  opens the session.
+- **Email.** Better Auth requires a unique address on its user model, so an
+  account created without one stores a placeholder under the reserved `.invalid`
+  domain (RFC 2606) and the API reports `email: null`. `verifications` stays in
+  the adapter even though nothing is emailed: Better Auth uses that table
+  internally and refuses to start without it.
 - **Rate limits** live in `apps/api/src/auth/rate-limit.ts`, because Better
   Auth's limiter guards its own HTTP handler and these routes call `auth.api.*`
-  directly. Limits: 3 codes / address / minute, 10 sign-ins / address+IP /
-  minute, 3 reset requests / address / minute.
-
-**Known limitation:** there is no mail transport yet. Codes are written to the
-API log; with `AUTH_DEV_EXPOSE_CODE=true` they are also kept in memory and
-returned as `devCode`, which is what the tests and local frontend work use. A
-deployment must set that flag to `false` **and** add an SMTP transport before it
-can onboard users.
+  directly. Ten sign-in attempts per address+username per minute → 429.
+- **Error codes** are translated from Better Auth's vocabulary to the
+  contract's. A bare 401 is not translated blindly: the route decides whether it
+  means wrong credentials or no session.
 
 ## Migrations
 
@@ -199,8 +195,8 @@ reach clients.
   still served and attributed to `DEFAULT_ACTOR_ID`. Making a session mandatory
   and enforcing project roles is phase 2, which is also when `FORBIDDEN` starts
   being produced.
-- **No mail transport.** See the Authentication section: verification codes only
-  reach the log or the developer-facing `devCode` field.
+- **No mail at all, by design.** Accounts are local; see the Authentication
+  section.
 - **No CORS.** In development the frontend should proxy `/api` to
   `http://127.0.0.1:3000` (Vite `server.proxy`), which keeps the API
   same-origin and avoids a wildcard CORS policy.

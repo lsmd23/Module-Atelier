@@ -1,5 +1,7 @@
 import type {
-  AuthorQuestion,
+  AccountSession,
+  AccountUser,
+  AuthSession,
   Conflict,
   Document,
   Entity,
@@ -12,10 +14,8 @@ import type {
 /**
  * 前端数据访问层接口。
  *
- * 注意：docs/CONTRACTS.md 已冻结 M0 路由（projects/documents/entities），
- * suggestions/patchsets/questions/preview 尚无路由。此接口表达前端需要的
- * 能力面；mockApi 全量实现，httpApi 只实现已冻结部分（其余抛
- * ROUTE_NOT_IN_CONTRACT）。组件只依赖本接口。
+ * 账户/会话/项目/文档/实体走 contracts 0.4.0 已冻结的形状（httpApi 已实现）；
+ * suggestions/patchsets/questions/preview 尚无路由，只有 mock 实现。
  */
 
 export interface SaveDocumentRequest {
@@ -43,9 +43,8 @@ export interface HealthStatus {
 }
 
 /**
- * 临时视图模型（MOCK ONLY）：contracts 0.2.0 没有 User/Member 模型，
- * M0 为单租户（写入归于 DEFAULT_ACTOR_ID）。此类型只为设置中心演示，
- * 正式模型待契约冻结后替换。见本轮 handoff 的 Contract Request。
+ * 临时视图模型（MOCK ONLY）：contracts 尚无项目成员模型，
+ * 此类型只为演示位服务，待 BE-002 phase 2 落地后替换。
  */
 export interface ProjectMember {
   id: string;
@@ -55,75 +54,57 @@ export interface ProjectMember {
   note?: string;
 }
 
-/**
- * 临时用户视图模型（MOCK ONLY）。字段按商用账户系统的常见面设计，
- * 契约冻结后以 packages/contracts 为准。
- */
-export interface AccountUser {
-  id: string;
-  /** 登录用唯一名 */
+/** 本地账户首次运行设置（契约 setupRequestSchema；email 在本地形态下省略）。 */
+export interface SetupRequest {
+  displayName: string;
   username: string;
-  email: string;
-  displayName: string;
-  role: "author" | "collaborator" | "reader";
-  emailVerified: boolean;
-  status: "active" | "suspended";
-  plan: "free" | "creator" | "studio";
-  createdAt: string;
-  lastLoginAt: string;
-}
-
-export interface AuthSession {
-  user: AccountUser;
-  /** MOCK：会话标识；真实实现应为 httpOnly cookie 或短时 token */
-  sessionId: string;
-}
-
-export interface RegisterRequest {
-  displayName: string;
-  email: string;
   password: string;
 }
 
-export interface AuthResult {
-  session: AuthSession | null;
-  /** 注册后需邮箱验证 */
-  requiresVerification?: boolean;
-}
-
 export interface AtelierApi {
-  getProject(projectId: string): Promise<Project>;
-  getHealth(): Promise<HealthStatus>;
-  /** MOCK ONLY：成员/权限路由不存在于 contracts 0.2.0。 */
-  listMembers(projectId: string): Promise<ProjectMember[]>;
-
-  /** MOCK ONLY：认证路由不存在于 contracts 0.2.0（M0 无 auth）。 */
-  login(email: string, password: string): Promise<AuthResult>;
-  register(req: RegisterRequest): Promise<AuthResult>;
-  sendVerificationCode(email: string): Promise<void>;
-  verifyEmail(email: string, code: string): Promise<AccountUser>;
+  /* ── 认证（契约 0.4.0 已冻结，本地账户，无邮箱验证）── */
+  getSetupStatus(): Promise<{ needsSetup: boolean }>;
+  setup(req: SetupRequest): Promise<AuthSession>;
+  login(username: string, password: string): Promise<AuthSession>;
   logout(): Promise<void>;
-  updateProfile(userId: string, patch: { displayName?: string }): Promise<AccountUser>;
-  changePassword(userId: string, current: string, next: string): Promise<void>;
+  me(): Promise<AccountUser>;
+  updateProfile(displayName: string): Promise<AccountUser>;
+  changePassword(currentPassword: string, newPassword: string): Promise<void>;
+  listSessions(): Promise<AccountSession[]>;
+  revokeSession(sessionId: string): Promise<void>;
 
+  /* ── 项目库（路由已冻结）── */
+  listProjects(): Promise<Project[]>;
+  getProject(projectId: string): Promise<Project>;
+  createProject(name: string): Promise<Project>;
+  renameProject(projectId: string, name: string): Promise<Project>;
+  getHealth(): Promise<HealthStatus>;
+
+  /* ── 文档与实体（路由已冻结）── */
   listDocuments(projectId: string): Promise<Document[]>;
   getDocument(documentId: string): Promise<Document>;
   createDocument(projectId: string, title: string): Promise<Document>;
   saveDocument(documentId: string, req: SaveDocumentRequest): Promise<SaveDocumentResult>;
-
   listEntities(projectId: string): Promise<Entity[]>;
   createEntity(projectId: string, req: CreateEntityRequest): Promise<Entity>;
 
+  /** MOCK ONLY：成员/权限路由不存在于 contracts（BE-002 phase 2 待落地）。 */
+  listMembers(projectId: string): Promise<ProjectMember[]>;
+
+  /* ── 以下在 contracts 中尚无路由（M3/M4），仅 mock 实现 ── */
   listSuggestions(projectId: string): Promise<Suggestion[]>;
   getPatchSet(patchSetId: string): Promise<PatchSet | null>;
   respondToSuggestion(suggestionId: string, action: SuggestionAction): Promise<Suggestion>;
-
-  listQuestions(projectId: string): Promise<AuthorQuestion[]>;
-  createQuestion(projectId: string, text: string, documentId: string): Promise<AuthorQuestion>;
+  listQuestions(projectId: string): Promise<import("@module-atelier/contracts").AuthorQuestion[]>;
+  createQuestion(
+    projectId: string,
+    text: string,
+    documentId: string
+  ): Promise<import("@module-atelier/contracts").AuthorQuestion>;
   setQuestionStatus(
     questionId: string,
-    status: AuthorQuestion["status"]
-  ): Promise<AuthorQuestion>;
+    status: import("@module-atelier/contracts").AuthorQuestion["status"]
+  ): Promise<import("@module-atelier/contracts").AuthorQuestion>;
 }
 
 /** MOCK ONLY：开发场景开关，用于演示各保存状态与建议到达。 */
@@ -131,6 +112,9 @@ export interface MockScenarioControl {
   simulateOffline: boolean;
   simulateSaveFailure: boolean;
   simulateConflict: boolean;
-  setFlag(flag: keyof Omit<MockScenarioControl, "setFlag" | "pushAmbientSuggestion">, value: boolean): void;
+  setFlag(
+    flag: keyof Omit<MockScenarioControl, "setFlag" | "pushAmbientSuggestion">,
+    value: boolean
+  ): void;
   pushAmbientSuggestion(): void;
 }

@@ -1,21 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
-  isValidEmail,
-  isValidVerificationCode,
+  isValidUsername,
   passwordStrength,
   validateLogin,
-  validateRegister
+  validateSetup
 } from "./validation";
 
-describe("isValidEmail", () => {
-  it("接受常见邮箱", () => {
-    expect(isValidEmail("luli@example.com")).toBe(true);
-    expect(isValidEmail("a.b+c@sub.domain.cn")).toBe(true);
+describe("isValidUsername", () => {
+  it("接受 3–24 字符", () => {
+    expect(isValidUsername("luli")).toBe(true);
+    expect(isValidUsername("陆离")).toBe(false); // 2 字
+    expect(isValidUsername("陆离离")).toBe(true);
   });
-  it("拒绝坏格式", () => {
-    for (const bad of ["", "no-at.com", "a@b", "a @b.com", "@x.com", "a@.com"]) {
-      expect(isValidEmail(bad)).toBe(false);
-    }
+  it("拒绝过短过长", () => {
+    expect(isValidUsername("ab")).toBe(false);
+    expect(isValidUsername("x".repeat(25))).toBe(false);
   });
 });
 
@@ -32,49 +31,32 @@ describe("passwordStrength", () => {
   });
 });
 
-describe("isValidVerificationCode", () => {
-  it("仅接受 6 位数字", () => {
-    expect(isValidVerificationCode("123456")).toBe(true);
-    expect(isValidVerificationCode("12345")).toBe(false);
-    expect(isValidVerificationCode("abcdef")).toBe(false);
-    expect(isValidVerificationCode("1234567")).toBe(false);
-  });
-});
-
-describe("validateRegister", () => {
+describe("validateSetup", () => {
   const ok = {
     displayName: "陆离",
-    email: "luli@example.com",
+    username: "luli",
     password: "Abcdef12",
-    confirmPassword: "Abcdef12",
-    acceptedTerms: true
+    confirmPassword: "Abcdef12"
   };
   it("合法输入无错误", () => {
-    expect(validateRegister(ok)).toEqual({});
+    expect(validateSetup(ok)).toEqual({});
   });
   it("逐字段报错", () => {
-    const e = validateRegister({
+    const e = validateSetup({
       displayName: "",
-      email: "bad",
+      username: "ab",
       password: "123",
-      confirmPassword: "456",
-      acceptedTerms: false
+      confirmPassword: "456"
     });
-    expect(Object.keys(e).sort()).toEqual([
-      "acceptedTerms",
-      "confirmPassword",
-      "displayName",
-      "email",
-      "password"
-    ]);
+    expect(Object.keys(e).sort()).toEqual(["confirmPassword", "displayName", "password", "username"]);
   });
 });
 
 describe("validateLogin", () => {
-  it("空密码报错", () => {
-    expect(validateLogin("luli@example.com", "")).toEqual({ password: "请输入密码" });
+  it("空字段报错", () => {
+    expect(validateLogin("", "")).toEqual({ username: "请输入用户名", password: "请输入密码" });
   });
   it("合法输入无错误", () => {
-    expect(validateLogin("luli@example.com", "whatever")).toEqual({});
+    expect(validateLogin("luli", "whatever")).toEqual({});
   });
 });

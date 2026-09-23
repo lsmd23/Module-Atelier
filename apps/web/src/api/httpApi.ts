@@ -1,18 +1,24 @@
 import {
   apiRoutes,
+  authResultResponseSchema,
   documentListResponseSchema,
   documentResponseSchema,
   entityListResponseSchema,
   entityResponseSchema,
   healthResponseSchema,
+  projectListResponseSchema,
   projectResponseSchema,
+  sessionListResponseSchema,
+  setupStatusResponseSchema,
+  userResponseSchema,
   type Conflict
 } from "@module-atelier/contracts";
 import type {
   AtelierApi,
   CreateEntityRequest,
   SaveDocumentRequest,
-  SaveDocumentResult
+  SaveDocumentResult,
+  SetupRequest
 } from "./types";
 
 /**
@@ -69,8 +75,80 @@ const route = (template: string, params: Record<string, string>) =>
   Object.entries(params).reduce((p, [k, v]) => p.replace(`:${k}`, encodeURIComponent(v)), template);
 
 export const httpApi: AtelierApi = {
+  /* ── 认证（契约 0.4.0 已冻结；会话经 httpOnly cookie，客户端不持凭证）── */
+
+  getSetupStatus() {
+    return request("GET", apiRoutes.authSetupStatus, undefined, (d) =>
+      setupStatusResponseSchema.parse({ data: d }).data
+    );
+  },
+
+  async setup(req: SetupRequest) {
+    const result = await request("POST", apiRoutes.authSetup, req, (d) =>
+      authResultResponseSchema.parse({ data: d }).data
+    );
+    if (!result.session) throw new Error("REGISTRATION_DISABLED");
+    return result.session;
+  },
+
+  async login(username: string, password: string) {
+    const result = await request("POST", apiRoutes.authLogin, { username, password }, (d) =>
+      authResultResponseSchema.parse({ data: d }).data
+    );
+    if (!result.session) throw new Error("INVALID_CREDENTIALS");
+    return result.session;
+  },
+
+  async logout() {
+    await request("POST", apiRoutes.authLogout, undefined, () => undefined);
+  },
+
+  me() {
+    return request("GET", apiRoutes.authMe, undefined, (d) => userResponseSchema.parse({ data: d }).data);
+  },
+
+  updateProfile(displayName: string) {
+    return request("PATCH", apiRoutes.authProfile, { displayName }, (d) =>
+      userResponseSchema.parse({ data: d }).data
+    );
+  },
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    await request("POST", apiRoutes.authPassword, { currentPassword, newPassword }, () => undefined);
+  },
+
+  async listSessions() {
+    const page = await request("GET", apiRoutes.authSessions, undefined, (d) =>
+      sessionListResponseSchema.parse({ data: d }).data
+    );
+    return page.items;
+  },
+
+  async revokeSession(sessionId: string) {
+    await request("DELETE", route(apiRoutes.authSession, { sessionId }), undefined, () => undefined);
+  },
+
+  /* ── 项目库 ── */
+
+  async listProjects() {
+    const page = await request("GET", apiRoutes.projects, undefined, (d) =>
+      projectListResponseSchema.parse({ data: d }).data
+    );
+    return page.items;
+  },
+
   getProject(projectId) {
     return request("GET", route(apiRoutes.project, { projectId }), undefined, (d) =>
+      projectResponseSchema.parse({ data: d }).data
+    );
+  },
+
+  createProject(name: string) {
+    return request("POST", apiRoutes.projects, { name }, (d) => projectResponseSchema.parse({ data: d }).data);
+  },
+
+  renameProject(projectId, name: string) {
+    return request("PATCH", route(apiRoutes.project, { projectId }), { name }, (d) =>
       projectResponseSchema.parse({ data: d }).data
     );
   },
@@ -80,30 +158,7 @@ export const httpApi: AtelierApi = {
   },
 
   listMembers(): Promise<never> {
-    // contracts 0.2.0 无成员/权限路由（M0 单租户）
-    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
-  },
-
-  /* auth：contracts 0.2.0 无认证路由（M0 无 auth），全部抛 ROUTE_NOT_IN_CONTRACT */
-  login(): Promise<never> {
-    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
-  },
-  register(): Promise<never> {
-    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
-  },
-  sendVerificationCode(): Promise<never> {
-    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
-  },
-  verifyEmail(): Promise<never> {
-    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
-  },
-  logout(): Promise<never> {
-    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
-  },
-  updateProfile(): Promise<never> {
-    return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
-  },
-  changePassword(): Promise<never> {
+    // 成员/权限路由不存在于 contracts（BE-002 phase 2 待落地）
     return Promise.reject(new Error("ROUTE_NOT_IN_CONTRACT"));
   },
 

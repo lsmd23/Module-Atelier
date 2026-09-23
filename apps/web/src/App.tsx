@@ -23,10 +23,16 @@ import { AccountDialog } from "./account/AccountDialog";
 import { SuggestionDetail } from "./suggestions/SuggestionDetail";
 import { SuggestionInbox } from "./suggestions/SuggestionInbox";
 import { PatchReview } from "./suggestions/PatchReview";
-
-const PROJECT_ID = "proj-veil";
+import { Launcher } from "./launcher/Launcher";
 
 export default function App() {
+  const currentProjectId = useUiStore((s) => s.currentProjectId);
+  // 未打开项目 → 启动器（项目库）。工作台的全部数据流以项目为作用域。
+  if (!currentProjectId) return <Launcher />;
+  return <Workspace projectId={currentProjectId} />;
+}
+
+function Workspace({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
   const viewMode = useUiStore((s) => s.viewMode);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
@@ -42,12 +48,6 @@ export default function App() {
   const accountOpen = useUiStore((s) => s.accountOpen);
   const editorFontSize = useUiStore((s) => s.editorFontSize);
   const autosaveDelayMs = useUiStore((s) => s.autosaveDelayMs);
-  const theme = useUiStore((s) => s.theme);
-
-  // 主题应用到 <html data-theme>，样式全部由 CSS 变量跟随
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
 
   const session = useDocumentSession(currentDocumentId, { autosaveDelayMs });
   const [editorHandle, setEditorHandle] = useState<MarkdownEditorHandle | null>(null);
@@ -61,21 +61,23 @@ export default function App() {
   );
 
   const documentsQuery = useQuery({
-    queryKey: ["documents", PROJECT_ID],
-    queryFn: () => api.listDocuments(PROJECT_ID)
+    queryKey: ["documents", projectId],
+    queryFn: () => api.listDocuments(projectId)
   });
   const entitiesQuery = useQuery({
-    queryKey: ["entities", PROJECT_ID],
-    queryFn: () => api.listEntities(PROJECT_ID)
+    queryKey: ["entities", projectId],
+    queryFn: () => api.listEntities(projectId)
   });
   const suggestionsQuery = useQuery({
-    queryKey: ["suggestions", PROJECT_ID],
-    queryFn: () => api.listSuggestions(PROJECT_ID)
+    queryKey: ["suggestions", projectId],
+    queryFn: () => api.listSuggestions(projectId)
   });
   const questionsQuery = useQuery({
-    queryKey: ["questions", PROJECT_ID],
-    queryFn: () => api.listQuestions(PROJECT_ID)
+    queryKey: ["questions", projectId],
+    queryFn: () => api.listQuestions(projectId)
   });
+
+  const projectQuery = useQuery({ queryKey: ["project", projectId], queryFn: () => api.getProject(projectId) });
 
   const documents = useMemo(() => documentsQuery.data ?? [], [documentsQuery.data]);
   const entities = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data]);
@@ -127,7 +129,7 @@ export default function App() {
   const [createEntityDraft, setCreateEntityDraft] = useState<{ name: string; type: EntityType | null } | null>(null);
 
   const createEntityMutation = useMutation({
-    mutationFn: (req: { type: EntityType; name: string }) => api.createEntity(PROJECT_ID, req),
+    mutationFn: (req: { type: EntityType; name: string }) => api.createEntity(projectId, req),
     onSuccess: (entity: Entity) => {
       void queryClient.invalidateQueries({ queryKey: ["entities"] });
       setCreateEntityDraft(null);
@@ -136,12 +138,22 @@ export default function App() {
   });
 
   const createDocumentMutation = useMutation({
-    mutationFn: () => api.createDocument(PROJECT_ID, `第${"一二三四五六七八九十"[documents.length] ?? ""}章 未命名`),
+    mutationFn: () => api.createDocument(projectId, `第${"一二三四五六七八九十"[documents.length] ?? ""}章 未命名`),
     onSuccess: (doc) => {
       void queryClient.invalidateQueries({ queryKey: ["documents"] });
       useUiStore.getState().openDocument(doc.id);
     }
   });
+
+  // 项目载入后：当前文档无效时自动打开第一章；无章节则停留空态
+  useEffect(() => {
+    if (!documentsQuery.data) return;
+    const docs = documentsQuery.data;
+    if (docs.length === 0) return;
+    if (!docs.some((d) => d.id === currentDocumentId)) {
+      useUiStore.getState().openDocument(docs[0]!.id);
+    }
+  }, [documentsQuery.data, currentDocumentId]);
 
   const suggestionMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: SuggestionAction }) => api.respondToSuggestion(id, action),
@@ -163,7 +175,7 @@ export default function App() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["questions"] })
   });
   const createQuestionMutation = useMutation({
-    mutationFn: (text: string) => api.createQuestion(PROJECT_ID, text, currentDocumentId),
+    mutationFn: (text: string) => api.createQuestion(projectId, text, currentDocumentId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["questions"] })
   });
 
@@ -197,7 +209,11 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <TopBar saveState={session.saveState} pendingCount={pendingCount} />
+      <TopBar
+        saveState={session.saveState}
+        pendingCount={pendingCount}
+        projectName={projectQuery.data?.name ?? "…"}
+      />
 
       <div className="flex min-h-0 flex-1">
         {sidebarOpen && (
@@ -257,7 +273,19 @@ export default function App() {
                 </div>
               )}
               <div className="min-h-0 flex-1">
-                {session.status === "ready" ? (
+                {!currentDocumentId ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 text-ink-faint">
+                    <p className="text-4xl">❦</p>
+                    <p className="text-sm">这个项目还没有章节。</p>
+                    <button
+                      type="button"
+                      onClick={() => createDocumentMutation.mutate()}
+                      className="rounded-md border border-hairline px-4 py-2 text-sm text-ink-soft hover:border-brass"
+                    >
+                      写下第一章
+                    </button>
+                  </div>
+                ) : session.status === "ready" ? (
                   <MarkdownEditor
                     key={session.editorKey}
                     ref={bindEditor}
@@ -283,6 +311,7 @@ export default function App() {
               <MockPdfPreview
                 content={session.previewContent}
                 title={documents.find((d) => d.id === currentDocumentId)?.title ?? ""}
+                projectName={projectQuery.data?.name ?? ""}
               />
             </div>
           )}

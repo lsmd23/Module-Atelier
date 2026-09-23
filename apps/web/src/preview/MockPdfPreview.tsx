@@ -150,7 +150,15 @@ function BlockView({ block }: { block: Block }) {
   }
 }
 
-export function MockPdfPreview({ content, title }: { content: string; title: string }) {
+export function MockPdfPreview({
+  content,
+  title,
+  projectName
+}: {
+  content: string;
+  title: string;
+  projectName: string;
+}) {
   const [phase, setPhase] = useState<"idle" | "compiling" | "done">("idle");
   const [shown, setShown] = useState(content);
 
@@ -178,7 +186,10 @@ export function MockPdfPreview({ content, title }: { content: string; title: str
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="book-page mx-auto w-full max-w-[44rem] px-10 py-10">
-          <p className="mb-6 text-center text-[11px] tracking-[0.3em] text-ink-faint">雾锁矿脉 · {title}</p>
+          <p className="mb-6 text-center text-[11px] tracking-[0.3em] text-ink-faint">
+            {projectName}
+            {title ? ` · ${title}` : ""}
+          </p>
           <div className="book-columns">
             {blocks.map((b, i) => (
               <BlockView key={i} block={b} />

@@ -53,6 +53,8 @@ export const autosaveDelayOptions = [
 
 interface UiState {
   // ── 会话态（不持久化）──
+  /** null = 启动器（项目库）；打开项目后进入工作台 */
+  currentProjectId: string | null;
   sidebarOpen: boolean;
   contextOpen: boolean;
   contextTab: ContextTab;
@@ -70,6 +72,8 @@ interface UiState {
   theme: ThemeId;
 
   setViewMode(mode: ViewMode): void;
+  openProject(projectId: string): void;
+  closeProject(): void;
   toggleSidebar(): void;
   toggleContext(): void;
   openContext(tab: ContextTab): void;
@@ -90,6 +94,7 @@ export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
       // 会话态
+      currentProjectId: null,
       sidebarOpen: true,
       contextOpen: true,
       contextTab: "suggestions",
@@ -107,6 +112,9 @@ export const useUiStore = create<UiState>()(
       theme: "parchment",
 
       setViewMode: (viewMode) => set({ viewMode }),
+      openProject: (currentProjectId) =>
+        set({ currentProjectId, currentDocumentId: "", selectedEntityId: null, selectedSuggestionId: null }),
+      closeProject: () => set({ currentProjectId: null, currentDocumentId: "" }),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
       toggleContext: () => set((s) => ({ contextOpen: !s.contextOpen })),
       openContext: (contextTab) => set({ contextOpen: true, contextTab }),

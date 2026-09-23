@@ -43,9 +43,7 @@ export const apiErrorCodes = [
   "VALIDATION_ERROR",
   "UNAUTHENTICATED",
   "INVALID_CREDENTIALS",
-  "INVALID_CODE",
   "WEAK_PASSWORD",
-  "EMAIL_NOT_VERIFIED",
   "REGISTRATION_DISABLED",
   "FORBIDDEN",
   "NOT_FOUND",
@@ -61,9 +59,7 @@ export const apiErrorStatus = {
   VALIDATION_ERROR: 400,
   UNAUTHENTICATED: 401,
   INVALID_CREDENTIALS: 401,
-  INVALID_CODE: 400,
   WEAK_PASSWORD: 400,
-  EMAIL_NOT_VERIFIED: 403,
   REGISTRATION_DISABLED: 403,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
@@ -315,24 +311,17 @@ export const entityRelationListResponseSchema = envelope(paginated(entityRelatio
 export const userResponseSchema = envelope(accountUserSchema);
 
 /**
- * `requiresVerification` tells the client to open the code screen; `session` is
- * null until the email is verified, because verification is what signs in.
+ * Local accounts: creating the first account (the owner) or signing in yields a
+ * session directly, because nothing is verified out of band.
  */
 export const authResultResponseSchema = envelope(
   z.object({
-    session: authSessionSchema.nullable(),
-    requiresVerification: z.boolean().optional()
+    session: authSessionSchema.nullable()
   })
 );
 
-export const verificationCodeResponseSchema = envelope(
-  z.object({
-    delivered: z.literal(true),
-    expiresInSeconds: z.number().int().positive(),
-    /** Only present when the server enables the development exposure flag. */
-    devCode: z.string().optional()
-  })
-);
+/** The first-run wizard asks this before showing itself. */
+export const setupStatusResponseSchema = envelope(z.object({ needsSetup: z.boolean() }));
 
 export const sessionListResponseSchema = envelope(paginated(accountSessionSchema));
 
@@ -363,16 +352,13 @@ export const apiRoutes = {
   entityRevisions: `${apiPrefix}/entities/:entityId/revisions`,
   entityRelations: `${apiPrefix}/entities/:entityId/relations`,
   relation: `${apiPrefix}/relations/:relationId`,
-  authRegister: `${apiPrefix}/auth/register`,
+  authSetup: `${apiPrefix}/auth/setup`,
+  authSetupStatus: `${apiPrefix}/auth/setup-status`,
   authLogin: `${apiPrefix}/auth/login`,
   authLogout: `${apiPrefix}/auth/logout`,
-  authVerificationCode: `${apiPrefix}/auth/verification-code`,
-  authVerifyEmail: `${apiPrefix}/auth/verify-email`,
   authMe: `${apiPrefix}/auth/me`,
   authProfile: `${apiPrefix}/auth/profile`,
   authPassword: `${apiPrefix}/auth/password`,
-  authPasswordResetRequest: `${apiPrefix}/auth/password-reset/request`,
-  authPasswordResetConfirm: `${apiPrefix}/auth/password-reset/confirm`,
   authSessions: `${apiPrefix}/auth/sessions`,
   authSession: `${apiPrefix}/auth/sessions/:sessionId`
 } as const;

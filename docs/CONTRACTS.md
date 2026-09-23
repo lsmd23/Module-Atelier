@@ -1,9 +1,15 @@
 # Contracts
 
-Current contract version: **0.3.0**. Source of truth: `packages/contracts/src` —
+Current contract version: **0.4.0**. Source of truth: `packages/contracts/src` —
 `domain.ts` holds the cross-module model, `auth.ts` the account/session model,
-`api.ts` the route-level shapes, `index.ts` re-exports all three. Versions 0.2.0
-and 0.3.0 are additive: no earlier type was changed.
+`api.ts` the route-level shapes, `index.ts` re-exports all three.
+
+Versions 0.2.0 and 0.3.0 were additive. **0.4.0 is a deliberate breaking
+change**: the application is installed locally and has no mail channel, so email
+verification was removed — the register/verification-code/verify-email and
+password-reset routes are gone, sign-in uses `username`, and `AccountUser.email`
+is nullable. `INVALID_CODE` and `EMAIL_NOT_VERIFIED` were dropped from the error
+codes with the flows that produced them.
 
 PatchSet operations are `update_document`, `create_entity`, `update_entity`, `create_relation`, and `delete_relation`. Applying a PatchSet must validate every base revision atomically. A mismatch yields `stale`/`conflict`; silent overwrite is forbidden.
 
@@ -39,48 +45,44 @@ List responses are `{ data: { items, limit, offset, hasMore } }`. `limit`
 defaults to 50 and is capped at 200. Resources are ordered by creation time
 (`created_at`, then `id`); revision history is newest first.
 
-### Account and session API (BE-002 phase 1)
+### Account API (contract 0.4.0)
 
-Sessions live in an httpOnly, SameSite=Lax cookie (`secure` when `BETTER_AUTH_URL`
-is https), so clients send no credential with a request. `sessionId` is returned
-only so the UI can list and revoke sessions.
+Local accounts: one installation, one owner created on first run, further
+accounts created by the owner on the same machine. Sessions live in an httpOnly,
+SameSite=Lax cookie (`secure` when the base URL is https), so clients send no
+credential with a request; `sessionId` is returned only so the UI can list and
+revoke sessions.
 
 | Method | Path | Body / query | Success |
 | --- | --- | --- | --- |
-| POST | `/api/auth/register` | `{ displayName, email, password }` | 201 `{ data: { session: null, requiresVerification: true } }` |
-| POST | `/api/auth/login` | `{ email, password }` | 200 `{ data: { session: { user, sessionId } } }` |
-| POST | `/api/auth/verification-code` | `{ email }` | 200 `{ data: { delivered, expiresInSeconds, devCode? } }` |
-| POST | `/api/auth/verify-email` | `{ email, code }` | 200 `{ data: { session } }` — verification signs the account in |
+| GET | `/api/auth/setup-status` | – | 200 `{ data: { needsSetup } }` |
+| POST | `/api/auth/setup` | `{ displayName, username, password, email? }` | 201 `{ data: { session } }`, or 403 `REGISTRATION_DISABLED` when an owner exists |
+| POST | `/api/auth/login` | `{ username, password }` | 200 `{ data: { session } }` |
 | POST | `/api/auth/logout` | – | 200 `{ data: { signedOut: true } }` (idempotent) |
 | GET | `/api/auth/me` | – | 200 `{ data: AccountUser }` |
 | PATCH | `/api/auth/profile` | `{ displayName }` | 200 `{ data: AccountUser }` |
 | POST | `/api/auth/password` | `{ currentPassword, newPassword }` | 200 `{ data: { updated: true } }`, revokes other sessions and rotates the current cookie |
-| POST | `/api/auth/password-reset/request` | `{ email }` | 200 `{ data: { delivered, expiresInSeconds, devCode? } }` |
-| POST | `/api/auth/password-reset/confirm` | `{ email, code, newPassword }` | 200 `{ data: { updated: true } }` |
 | GET | `/api/auth/sessions` | `limit`, `offset` | 200 list of `AccountSession` (`current` marks the caller's session) |
 | DELETE | `/api/auth/sessions/:sessionId` | – | 200 `{ data: { id } }` |
 
-`AccountUser` carries `id, username, email, displayName, role (author |
-collaborator | reader), emailVerified, status (active | suspended), plan (free |
-creator | studio), createdAt, lastLoginAt`. Role and plan are stored but not yet
-enforced: project-level authorization is BE-002 phase 2.
+`AccountUser` carries `id, username, email (nullable), displayName, role (author
+| collaborator | reader), emailVerified, status (active | suspended), plan (free |
+creator | studio), createdAt, lastLoginAt`.
 
 Behaviour worth knowing:
 
-- **Registration is closed by default.** `ALLOW_REGISTRATION=false` admits only
-  the first account (bootstrap) and then answers 403 `REGISTRATION_DISABLED`.
-- **Duplicate registration is deliberately indistinguishable.** Signing up an
-  existing address returns the same 201 as a new one and creates nothing, so the
-  endpoint cannot be used to enumerate accounts.
-- **Verification is the sign-in step** for a new account; a password is not
-  required at that point. The code is 6 digits, single-use, expires after 300s,
-  allows 3 attempts, and is stored hashed.
-- **Code delivery has no transport yet.** Phase 1 logs the code instead of
-  sending mail (see `docs/BACKEND.md`); `AUTH_DEV_EXPOSE_CODE=true` additionally
-  returns it as `devCode` and must never be enabled in a deployment.
-- **Rate limits are enforced in this API**, not by the auth library: 3 codes per
-  address per minute, 10 sign-in attempts per address+IP per minute, 3 reset
-  requests per address per minute → 429 `RATE_LIMITED`.
+- **Nothing is emailed.** No verification step, no password reset by mail; an
+  account whose owner forgets its password is reset on this machine by the
+  installation owner (BE-002 phase 2 tooling).
+- **`email` is optional and usually absent.** Better Auth requires a unique
+  address on its user model, so accounts created without one store a placeholder
+  under the reserved `.invalid` domain; the API reports `email: null` for those
+  and never exposes the placeholder.
+- **Setup closes after the first account.** `POST /api/auth/setup` answers 403
+  once any account exists.
+- **Sign-in is rate limited** in this API (10 attempts per address+username per
+  minute, 429 `RATE_LIMITED`), because Better Auth's limiter only guards its own
+  HTTP handler, which this API does not mount.
 
 ### Envelope and errors
 
@@ -91,11 +93,9 @@ in the `x-request-id` response header as well.
 | Code | HTTP | Meaning |
 | --- | --- | --- |
 | `VALIDATION_ERROR` | 400 | Body, query or path parameter failed its contract schema (`details.issues`) |
-| `INVALID_CREDENTIALS` | 401 | Wrong email/password, or a wrong current password on change |
-| `INVALID_CODE` | 400 | Wrong, expired or already-used verification code |
+| `INVALID_CREDENTIALS` | 401 | Wrong username/password, or a wrong current password on change |
 | `WEAK_PASSWORD` | 400 | Password outside the accepted length range |
-| `EMAIL_NOT_VERIFIED` | 403 | Sign-in attempted before the address was verified |
-| `REGISTRATION_DISABLED` | 403 | Public sign-up is off and the instance already has an account |
+| `REGISTRATION_DISABLED` | 403 | Setup was attempted after the owner already exists |
 | `NOT_FOUND` | 404 | Resource does not exist, or the requested entity is not part of the given project |
 | `CONFLICT` | 409 | `baseRevision` is stale (`details.conflict` carries the `Conflict` object) |
 | `DOMAIN_CONSTRAINT` | 422 | Stored invariant rejected the request (duplicate relation, cross-project edge) |

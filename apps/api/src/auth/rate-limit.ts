@@ -53,26 +53,13 @@ export function createWindowRateLimiter(options: { windowSeconds: number; max: n
   };
 }
 
-/** Limits applied by the auth routes. */
-export const authRateLimits = {
-  /** Codes to one address: three per minute, matching the client's cooldown. */
-  verificationCode: { windowSeconds: 60, max: 3 },
-  /** Password guesses for one address: ten per minute. */
-  login: { windowSeconds: 60, max: 10 },
-  /** Reset requests for one address: three per minute. */
-  passwordReset: { windowSeconds: 60, max: 3 }
-} as const;
+/** Password guesses from one address+username: ten per minute. */
+export const loginRateLimit = { windowSeconds: 60, max: 10 } as const;
 
 export type AuthRateLimiters = {
-  verificationCode: RateLimiter;
   login: RateLimiter;
-  passwordReset: RateLimiter;
 };
 
 export function createAuthRateLimiters(): AuthRateLimiters {
-  return {
-    verificationCode: createWindowRateLimiter(authRateLimits.verificationCode),
-    login: createWindowRateLimiter(authRateLimits.login),
-    passwordReset: createWindowRateLimiter(authRateLimits.passwordReset)
-  };
+  return { login: createWindowRateLimiter(loginRateLimit) };
 }

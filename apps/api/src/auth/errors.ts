@@ -9,14 +9,10 @@ import type { ApiErrorCode, ApiErrorDetails } from "@module-atelier/contracts";
 export type AuthFailure = { code: ApiErrorCode; message: string; details?: ApiErrorDetails };
 
 const vocabulary: Record<string, AuthFailure> = {
-  INVALID_EMAIL_OR_PASSWORD: { code: "INVALID_CREDENTIALS", message: "the email or password is incorrect" },
+  INVALID_EMAIL_OR_PASSWORD: { code: "INVALID_CREDENTIALS", message: "the username or password is incorrect" },
   INVALID_PASSWORD: { code: "INVALID_CREDENTIALS", message: "the current password is incorrect" },
-  CREDENTIAL_ACCOUNT_NOT_FOUND: { code: "INVALID_CREDENTIALS", message: "the email or password is incorrect" },
-  EMAIL_NOT_VERIFIED: { code: "EMAIL_NOT_VERIFIED", message: "the email address has not been verified yet" },
-  INVALID_OTP: { code: "INVALID_CODE", message: "the verification code is wrong or has expired" },
-  OTP_EXPIRED: { code: "INVALID_CODE", message: "the verification code has expired" },
-  OTP_NOT_FOUND: { code: "INVALID_CODE", message: "no verification code is pending for this address" },
-  TOO_MANY_ATTEMPTS: { code: "RATE_LIMITED", message: "too many verification attempts" },
+  CREDENTIAL_ACCOUNT_NOT_FOUND: { code: "INVALID_CREDENTIALS", message: "the username or password is incorrect" },
+  INVALID_USERNAME: { code: "VALIDATION_ERROR", message: "the username is not valid" },
   PASSWORD_TOO_SHORT: { code: "WEAK_PASSWORD", message: "the password is too short" },
   PASSWORD_TOO_LONG: { code: "WEAK_PASSWORD", message: "the password is too long" },
   USER_ALREADY_EXISTS: { code: "DOMAIN_CONSTRAINT", message: "that account already exists" },
@@ -46,6 +42,11 @@ function readNumber(source: unknown, key: string): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
+/** HTTP status carried by a Better Auth error, when it has one. */
+export function authErrorStatusCode(error: unknown): number | undefined {
+  return readNumber(error, "statusCode") ?? readNumber(error, "status");
+}
+
 /** True when the thrown value looks like a Better Auth API error. */
 export function isAuthApiError(error: unknown): boolean {
   if (error === null || typeof error !== "object") {
@@ -67,12 +68,11 @@ export function mapAuthError(error: unknown): AuthFailure | undefined {
     return vocabulary[code];
   }
 
-  const statusCode = readNumber(error, "statusCode") ?? readNumber(error, "status");
-  if (statusCode === 429) {
+  // Only codes with one obvious meaning are mapped here. A bare 401 is left to
+  // the caller: on sign-in it means wrong credentials, elsewhere it means no
+  // session, and guessing would produce the wrong contract code.
+  if (authErrorStatusCode(error) === 429) {
     return { code: "RATE_LIMITED", message: "too many requests" };
-  }
-  if (statusCode === 401) {
-    return { code: "UNAUTHENTICATED", message: "authentication is required" };
   }
   return undefined;
 }

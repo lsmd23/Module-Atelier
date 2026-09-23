@@ -4,8 +4,8 @@ import type { FastifyInstance } from "fastify";
 import type { Database } from "@module-atelier/db";
 import { createDocumentService, createEntityService, createProjectService, createRelationService } from "@module-atelier/domain";
 import { createAuth } from "./auth/auth.ts";
-import { createLogMailer } from "./auth/mailer.ts";
 import { createAuthRateLimiters } from "./auth/rate-limit.ts";
+import type { AuthRateLimiters } from "./auth/rate-limit.ts";
 import { createSessionResolver } from "./auth/session-resolver.ts";
 import type { ApiConfig } from "./config.ts";
 import { notFoundResponse, toErrorResponse } from "./http.ts";
@@ -20,6 +20,8 @@ import type { ApiRouteDeps } from "./types.ts";
 export type ServerDeps = {
   config: ApiConfig;
   database: Database;
+  /** Test seam: share one limiter set so a suite can reset its windows. */
+  rateLimiters?: AuthRateLimiters;
 };
 
 /** Bodies are capped at 8 MiB; document content itself is capped by contract. */
@@ -34,35 +36,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     bodyLimit
   });
 
-  /**
-   * Phase 1 has no SMTP transport: codes are written to the log. With
-   * AUTH_DEV_EXPOSE_CODE the code is also kept in memory so the API can return
-   * it, and only then is it printed in full.
-   */
-  const mailer = createLogMailer(
-    (mail) => {
-      if (config.exposeVerificationCode) {
-        app.log.warn(
-          { email: mail.email, type: mail.type, code: mail.code },
-          "verification code issued (AUTH_DEV_EXPOSE_CODE is on: never enable this in a deployment)"
-        );
-        return;
-      }
-      app.log.info(
-        { email: mail.email, type: mail.type },
-        "verification code issued, but no mail transport is configured in this build"
-      );
-    },
-    { rememberCodes: config.exposeVerificationCode }
-  );
-
   const auth = createAuth({
     db: database.db,
     config: {
       secret: config.authSecret,
       baseUrl: config.authBaseUrl,
-      trustedOrigins: config.trustedOrigins,
-      mailer
+      trustedOrigins: config.trustedOrigins
     }
   });
 
@@ -100,10 +79,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerAuthRoutes(app, {
     auth,
     db: database.db,
-    mailer,
-    allowRegistration: config.allowRegistration,
-    exposeVerificationCode: config.exposeVerificationCode,
-    rateLimiters: createAuthRateLimiters()
+    rateLimiters: deps.rateLimiters ?? createAuthRateLimiters()
   });
   registerProjectRoutes(app, services);
   registerDocumentRoutes(app, services);

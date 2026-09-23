@@ -8,8 +8,8 @@ Completed:
 - `@module-atelier/contracts` v0.1.0 created with Zod schemas/types for core entities, revisioning, PatchSet, suggestions, questions, and conflicts.
 - Initial architecture, domain, roadmap, task, and integration records created.
 - BE-001 backend skeleton: `packages/db` (Drizzle schema + repeatable migrations), `packages/domain` (services, revision semantics, row→contract mapping), `apps/api` (Fastify `/api` routes with `{ data }` / `{ error }` envelopes). Route contract frozen in `docs/CONTRACTS.md`; runbook in `docs/BACKEND.md`.
-- Contract 0.2.0 adds route-level schemas in `packages/contracts/src/api.ts` (additive; domain types unchanged).
-- BE-002 phase 1 delivered: real identity with Better Auth behind our own `/api/auth/*` routes (register, login, verification code, verify, logout, me, profile, password, password reset, sessions), auth tables in `packages/db/src/schema-auth.ts`, contract 0.3.0 with the account/session model and new error codes, and rate limits enforced in the API.
+- Contract 0.2.0 added route-level schemas in `packages/contracts/src/api.ts`; 0.4.0 removes the email-verification surface because accounts are local (deliberate breaking change).
+- BE-002 accounts delivered and revised: Better Auth behind our own `/api/auth/*` routes, with local accounts (first-run owner setup, username sign-in, no email verification) per contract 0.4.0; auth tables in `packages/db/src/schema-auth.ts` and rate limits enforced in the API.
 
 In Progress:
 - BE-002 phase 2 (project ownership, members, role enforcement) is next; phases 3-5 cover the document tree, the asset store and frontend wiring.

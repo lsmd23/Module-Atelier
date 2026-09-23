@@ -1,5 +1,6 @@
 import type { AccountUser, Document, Entity, Project, Relation, Revision } from "@module-atelier/contracts";
 import { accountPlans, accountRoles, accountStatuses } from "@module-atelier/contracts";
+import { isPlaceholderEmail } from "./users.ts";
 import type { DocumentRow, EntityRow, ProjectRow, RelationRow, RevisionRow, UserRow } from "@module-atelier/db";
 
 /**
@@ -127,7 +128,7 @@ export function toAccountUser(row: UserRow): AccountUser {
   return {
     id: row.id,
     username: row.username,
-    email: row.email,
+    email: isPlaceholderEmail(row.email) ? null : row.email,
     displayName: row.name,
     role: asMemberOf(row.role, accountRoles, "author"),
     emailVerified: row.emailVerified,

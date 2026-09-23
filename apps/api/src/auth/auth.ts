@@ -1,10 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { emailOTP, username } from "better-auth/plugins";
+import { username } from "better-auth/plugins";
 import { accounts, sessions, users, verifications } from "@module-atelier/db";
 import type { DbClient } from "@module-atelier/db";
-import type { Mailer } from "./mailer.ts";
 
 /**
  * Better Auth wiring (BE-002 phase 1).
@@ -20,13 +19,11 @@ import type { Mailer } from "./mailer.ts";
  */
 
 export const sessionLifetimeSeconds = 60 * 60 * 24 * 30;
-export const verificationCodeLifetimeSeconds = 300;
 
 export type AuthConfig = {
   secret: string;
   baseUrl: string;
   trustedOrigins: string[];
-  mailer: Mailer;
 };
 
 export function createAuth(deps: { db: DbClient; config: AuthConfig }) {
@@ -38,6 +35,10 @@ export function createAuth(deps: { db: DbClient; config: AuthConfig }) {
     trustedOrigins: config.trustedOrigins,
     database: drizzleAdapter(db, {
       provider: "pg",
+      /**
+       * `verifications` stays even though nothing is emailed: Better Auth uses
+       * that table internally and refuses to start when it is missing.
+       */
       schema: { users, sessions, accounts, verifications }
     }),
     user: {
@@ -60,16 +61,9 @@ export function createAuth(deps: { db: DbClient; config: AuthConfig }) {
       enabled: true,
       minPasswordLength: 8,
       maxPasswordLength: 128,
-      /** Verification is what signs a new account in, so sign-up stays anonymous. */
-      requireEmailVerification: true,
-      autoSignIn: false
-    },
-    emailVerification: {
-      /**
-       * Confirming the code is the sign-in step for a new account: the client
-       * has no password to send at that point, so verification must open a session.
-       */
-      autoSignInAfterVerification: true
+      /** Local accounts: nothing is verified out of band, so sign-up signs in. */
+      requireEmailVerification: false,
+      autoSignIn: true
     },
     advanced: {
       /** UUID primary keys, matching the rest of the schema. */
@@ -81,24 +75,8 @@ export function createAuth(deps: { db: DbClient; config: AuthConfig }) {
         path: "/"
       }
     },
-    plugins: [
-      username(),
-      emailOTP({
-        otpLength: 6,
-        expiresIn: verificationCodeLifetimeSeconds,
-        allowedAttempts: 3,
-        /** Codes are never stored in clear text. */
-        storeOTP: "hashed",
-        /** OTP sign-in must not create accounts; registration is explicit. */
-        disableSignUp: true,
-        overrideDefaultEmailVerification: true,
-        sendVerificationOnSignUp: false,
-        rateLimit: { window: 60, max: 3 },
-        sendVerificationOTP: async ({ email, otp, type }) => {
-          await config.mailer.sendVerificationCode({ email, code: otp, type });
-        }
-      })
-    ]
+    /** Local accounts only: `username` is the login handle, nothing is emailed. */
+    plugins: [username()]
   });
 }
 

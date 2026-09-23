@@ -11,4 +11,4 @@ export * from "./domain.ts";
 export * from "./auth.ts";
 export * from "./api.ts";
 
-export const contractVersion = "0.3.0" as const;
+export const contractVersion = "0.4.0" as const;

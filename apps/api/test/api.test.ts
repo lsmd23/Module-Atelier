@@ -38,11 +38,9 @@ beforeAll(async () => {
       LOG_LEVEL: "silent",
       API_PORT: "3000",
       DEFAULT_ACTOR_ID: "api-test-actor",
-      // Test-only values; AUTH_DEV_EXPOSE_CODE lets the suite read the code
-      // from the response instead of the mail transport.
+      // Test-only signing secret; local accounts need no mail configuration.
       BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret",
-      BETTER_AUTH_URL: "http://127.0.0.1:3000",
-      AUTH_DEV_EXPOSE_CODE: "true"
+      BETTER_AUTH_URL: "http://127.0.0.1:3000"
     }),
     database: { db: context.db, pool: context.pool }
   });
@@ -96,7 +94,7 @@ describe("health", () => {
     const body = healthResponseSchema.parse(response.json());
     expect(body.data.database).toBe("up");
     expect(body.data.status).toBe("ok");
-    expect(body.data.contractVersion).toBe("0.3.0");
+    expect(body.data.contractVersion).toBe("0.4.0");
   });
 });
 

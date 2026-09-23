@@ -23,9 +23,10 @@ export type AccountStatus = (typeof accountStatuses)[number];
 
 export const accountUserSchema = z.object({
   id: z.string(),
-  /** Login handle, unique. Derived from the email unless changed later. */
+  /** Login handle, unique. This is what a local account signs in with. */
   username: z.string().min(1),
-  email: z.string(),
+  /** Optional: this application is local-first and sends no mail. */
+  email: z.string().nullable(),
   displayName: z.string(),
   role: z.enum(accountRoles),
   emailVerified: z.boolean(),
@@ -54,26 +55,16 @@ export type AccountSession = z.infer<typeof accountSessionSchema>;
 /* requests                                                            */
 /* ------------------------------------------------------------------ */
 
-export const registerRequestSchema = z.object({
+export const setupRequestSchema = z.object({
   displayName: z.string().trim().min(1).max(50),
-  email: z.string().trim().email().max(254),
-  password: z.string().min(8).max(128)
+  username: z.string().trim().min(3).max(24),
+  password: z.string().min(8).max(128),
+  email: z.string().trim().email().max(254).optional()
 });
 
 export const loginRequestSchema = z.object({
-  email: z.string().trim().email().max(254),
+  username: z.string().trim().min(1).max(64),
   password: z.string().min(1).max(128)
-});
-
-export const verificationCodeRequestSchema = z.object({
-  email: z.string().trim().email().max(254)
-});
-
-export const verificationCodePattern = /^\d{6}$/;
-
-export const verifyEmailRequestSchema = z.object({
-  email: z.string().trim().email().max(254),
-  code: z.string().trim().regex(verificationCodePattern, "must be a 6 digit code")
 });
 
 export const updateProfileRequestSchema = z.object({
@@ -82,16 +73,6 @@ export const updateProfileRequestSchema = z.object({
 
 export const changePasswordRequestSchema = z.object({
   currentPassword: z.string().min(1).max(128),
-  newPassword: z.string().min(8).max(128)
-});
-
-export const passwordResetRequestSchema = z.object({
-  email: z.string().trim().email().max(254)
-});
-
-export const passwordResetConfirmSchema = z.object({
-  email: z.string().trim().email().max(254),
-  code: z.string().trim().regex(verificationCodePattern, "must be a 6 digit code"),
   newPassword: z.string().min(8).max(128)
 });
 

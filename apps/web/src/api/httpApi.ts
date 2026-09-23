@@ -176,8 +176,12 @@ export const httpApi: AtelierApi = {
   },
 
   createDocument(projectId, title: string) {
-    return request("POST", route(apiRoutes.projectDocuments, { projectId }), { title }, (d) =>
-      documentResponseSchema.parse({ data: d }).data
+    // 与 mock 行为一致：新章节带上标题行脚手架
+    return request(
+      "POST",
+      route(apiRoutes.projectDocuments, { projectId }),
+      { title, content: `# ${title}\n\n` },
+      (d) => documentResponseSchema.parse({ data: d }).data
     );
   },
 

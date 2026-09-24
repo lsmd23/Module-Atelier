@@ -2,7 +2,7 @@ import { defineConfig } from "drizzle-kit";
 
 /**
  * Migrations for the *app-level* database (BE-003): accounts, sessions,
- * verification state, app settings and the project index.
+ * verification state, app settings, the project index and the resource index.
  */
 export default defineConfig({
   dialect: "sqlite",

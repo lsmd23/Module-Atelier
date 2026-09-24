@@ -5,9 +5,10 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { projectIndex } from "./schema-app.ts";
+import { projectIndex, resourceIndex } from "./schema-app.ts";
 import * as appSchema from "./schema-app.ts";
 import { scanProjectDirectories } from "./data-directory.ts";
+import { openProjectDatabase } from "./sqlite.ts";
 import type { DataDirectoryLayout } from "./data-directory.ts";
 
 /**
@@ -98,6 +99,76 @@ export function rebuildProjectIndex(db: AppDatabase, layout: DataDirectoryLayout
   }
 
   return { added, refreshed, removed };
+}
+
+export type ResourceIndexRebuild = {
+  indexed: number;
+  skipped: string[];
+};
+
+/**
+ * Repairs the resource index by reading every project database.
+ *
+ * The index is written next to a resource that lives in another file, so a crash
+ * between the two writes (or a database restored from a backup) can leave it
+ * incomplete. Scanning is the repair path, exactly like the project list: this
+ * runs on startup and never destroys data, it only rebuilds the mapping.
+ */
+export async function rebuildResourceIndex(
+  db: AppDatabase,
+  layout: DataDirectoryLayout
+): Promise<ResourceIndexRebuild> {
+  const skipped: string[] = [];
+  let indexed = 0;
+  const seen = new Set<string>();
+
+  for (const entry of scanProjectDirectories(layout)) {
+    let project: Awaited<ReturnType<typeof openProjectDatabase>> | undefined;
+    try {
+      project = await openProjectDatabase(layout.projectDatabase(entry.id));
+      const rows = project.sqlite
+        .prepare("select id, 'document' as kind from documents union all select id, 'entity' as kind from entities")
+        .all() as { id: string; kind: string }[];
+      for (const row of rows) {
+        const id = row.id;
+        const resourceType = row.kind;
+        seen.add(id);
+        await db
+          .insert(resourceIndex)
+          .values({ id, projectId: entry.id, resourceType })
+          .onConflictDoNothing()
+          .run();
+        indexed += 1;
+      }
+    } catch {
+      // A project file that cannot be read is reported, never fatal.
+      skipped.push(entry.id);
+    } finally {
+      project?.close();
+    }
+  }
+
+  // Drop entries that no longer correspond to a resource (deleted documents).
+  const known = await db.select().from(resourceIndex);
+  for (const row of known) {
+    if (!seen.has(row.id)) {
+      await db.delete(resourceIndex).where(eq(resourceIndex.id, row.id)).run();
+    }
+  }
+
+  return { indexed, skipped };
+}
+
+/** Records where a resource lives; returns nothing so callers stay simple. */
+export async function indexResource(
+  db: AppDatabase,
+  entry: { id: string; projectId: string; resourceType: "document" | "entity" }
+): Promise<void> {
+  await db
+    .insert(resourceIndex)
+    .values(entry)
+    .onConflictDoUpdate({ target: resourceIndex.id, set: { projectId: entry.projectId, resourceType: entry.resourceType } })
+    .run();
 }
 
 /** True when the app database file exists, i.e. the app has been started before. */

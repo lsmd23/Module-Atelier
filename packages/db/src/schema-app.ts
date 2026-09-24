@@ -125,6 +125,27 @@ export const projectIndex = sqliteTable(
   (table) => [unique("project_index_path_unique").on(table.path)]
 );
 
+/**
+ * Maps a resource id to the project that owns it.
+ *
+ * One database per project means a flat route like `/api/documents/:id` cannot
+ * know which file to open, so this index answers that question. It is written
+ * alongside the resource, but the two live in different files, so there is no
+ * single transaction that covers both: the entry can therefore lag, which is why
+ * it is a *rebuildable index* like the project list itself, and why a miss is
+ * repaired by scanning the project databases on startup.
+ */
+export const resourceIndex = sqliteTable(
+  "resource_index",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull(),
+    resourceType: text("resource_type").notNull(),
+    createdAt: createdAt()
+  },
+  (table) => [index("resource_index_project_idx").on(table.projectId)]
+);
+
 export type AppUserRow = typeof users.$inferSelect;
 export type AppSessionRow = typeof sessions.$inferSelect;
 export type ProjectIndexRow = typeof projectIndex.$inferSelect;

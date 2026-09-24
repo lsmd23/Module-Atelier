@@ -1,24 +1,20 @@
-import { createDb } from "@module-atelier/db";
 import { loadConfig } from "./config.ts";
+import { startRuntime } from "./runtime.ts";
 import { buildServer } from "./server.ts";
 
 const config = loadConfig(process.env);
-const database = createDb(config.databaseUrl);
-const app = buildServer({ config, database });
+const runtime = await startRuntime(config);
+const app = buildServer({ config, runtime });
 
-// Fail fast with a readable message instead of serving broken requests.
-try {
-  await database.pool.query("select 1");
-} catch (error) {
-  app.log.error({ err: error }, "database is unreachable; check DATABASE_URL and that PostgreSQL is running");
-  await database.pool.end();
-  process.exit(1);
-}
+app.log.info(
+  { dataDirectory: runtime.layout.root, authBaseUrl: config.authBaseUrl },
+  "local data directory ready: the application runs entirely on this machine"
+);
 
 const shutdown = async (signal: string): Promise<void> => {
   app.log.info({ signal }, "shutting down");
   await app.close();
-  await database.pool.end();
+  runtime.close();
   process.exit(0);
 };
 
@@ -31,12 +27,9 @@ process.on("SIGTERM", () => {
 
 try {
   await app.listen({ host: config.host, port: config.port });
-  app.log.info(
-    { actorId: config.actorId, authBaseUrl: config.authBaseUrl },
-    "API ready: local accounts are live, project routes are not yet role-guarded"
-  );
+  app.log.info("API ready: local accounts are live, project routes are not yet role-guarded");
 } catch (error) {
   app.log.error({ err: error }, "failed to start");
-  await database.pool.end();
+  runtime.close();
   process.exit(1);
 }

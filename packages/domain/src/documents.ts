@@ -1,10 +1,10 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import type { Document, Revision } from "@module-atelier/contracts";
 import { documents, revisions } from "@module-atelier/db";
-import type { DbClient, DbTransaction, DocumentRow } from "@module-atelier/db";
+import { inTransaction } from "@module-atelier/db";
+import type { DocumentRowSqlite, ProjectDatabase, ProjectRegistry, ProjectTransaction } from "@module-atelier/db";
 import { NotFoundError, RevisionConflictError } from "./errors.ts";
 import { toDocument, toDocumentSnapshot, toRevision } from "./mappers.ts";
-import { assertProjectExists } from "./projects.ts";
 import { pageFromRows, requireRow } from "./query.ts";
 import type { Page, PageRequest } from "./query.ts";
 
@@ -13,68 +13,81 @@ export type UpdateDocumentInput = { baseRevision: number; title?: string; conten
 
 /**
  * Document content is Markdown source. Rendered HTML is never stored, and no
- * layout or typography semantics are attached here: those are Publisher
- * concerns that operate on a converted representation, not on these rows.
+ * layout or typography semantics are attached here: those belong to the
+ * Publisher layer.
+ *
+ * The service is bound to one project's database, which is what makes the
+ * project boundary structural: identifiers from another project simply do not
+ * exist in this file.
  */
-export function createDocumentService(deps: { db: DbClient; actorId: string }) {
-  const { db, actorId } = deps;
+/**
+ * The service is application-wide: one project is one database file, so every
+ * call names the project it works on and the registry supplies that file. A
+ * project that does not exist is reported as not found, never guessed at.
+ */
+export function createDocumentService(deps: { registry: ProjectRegistry; actorId: string }) {
+  const { registry } = deps;
 
-  async function recordRevision(
-    tx: DbTransaction,
-    row: DocumentRow,
-    baseRevision: number,
-    actor: string
-  ): Promise<void> {
-    await tx.insert(revisions).values({
-      projectId: row.projectId,
-      resourceType: "document",
-      resourceId: row.id,
-      revision: row.revision,
-      baseRevision,
-      authorId: actor,
-      snapshot: toDocumentSnapshot(row)
-    });
+  function projectDb(projectId: string): ProjectDatabase {
+    if (!registry.exists(projectId)) {
+      throw new NotFoundError("project", projectId);
+    }
+    return registry.open(projectId).db;
   }
 
-  /**
-   * `actorId` defaults to the identity the service was built with; the API
-   * passes the signed-in user so revisions carry the real author.
-   */
+  function recordRevision(
+    tx: ProjectTransaction,
+    row: DocumentRowSqlite,
+    baseRevision: number,
+    actor: string
+  ): void {
+    tx.insert(revisions)
+      .values({
+        projectId: row.projectId,
+        resourceType: "document",
+        resourceId: row.id,
+        revision: row.revision,
+        baseRevision,
+        authorId: actor,
+        snapshot: JSON.stringify(toDocumentSnapshot(row))
+      })
+      .run();
+  }
+
+  /** `actorId` defaults to the identity the service was built with. */
   async function create(
     projectId: string,
     input: CreateDocumentInput,
     actorId: string = deps.actorId
   ): Promise<Document> {
-    return db.transaction(async (tx) => {
-      await assertProjectExists(tx, projectId);
-      const inserted = await tx
-        .insert(documents)
-        .values({ projectId, title: input.title, content: input.content })
-        .returning();
-      const row = requireRow(inserted, "documents insert");
-      await recordRevision(tx, row, 0, actorId);
+    return inTransaction(projectDb(projectId), (tx) => {
+      const row = requireRow(
+        [tx.insert(documents).values({ projectId, title: input.title, content: input.content }).returning().get()],
+        "documents insert"
+      );
+      recordRevision(tx, row, 0, actorId);
       return toDocument(row);
     });
   }
 
   /**
-   * Optimistic concurrency: the row is locked for the duration of the
-   * transaction, `baseRevision` must equal the stored revision, and the new
-   * state is written together with its revision row. A stale base revision
-   * raises `RevisionConflictError` and nothing is written.
+   * Optimistic concurrency: the transaction reads the row, `baseRevision` must
+   * match the stored revision, and the new state is written together with its
+   * revision row in the same transaction. A stale base revision raises
+   * `RevisionConflictError` and writes nothing.
    *
-   * A save that changes nothing returns the current state without advancing
-   * the revision, so repeated autosaves cannot inflate revision numbers (which
-   * would make every AI patch look stale).
+   * A save that changes nothing returns the current state without advancing the
+   * revision, so repeated autosaves cannot inflate revision numbers (which would
+   * make every AI patch look stale).
    */
   async function update(
+    projectId: string,
     documentId: string,
     input: UpdateDocumentInput,
     actorId: string = deps.actorId
   ): Promise<Document> {
-    return db.transaction(async (tx) => {
-      const found = await tx.select().from(documents).where(eq(documents.id, documentId)).for("update").limit(1);
-      const row = found[0];
+    return inTransaction(projectDb(projectId), (tx) => {
+      const row = tx.select().from(documents).where(eq(documents.id, documentId)).get();
       if (row === undefined) {
         throw new NotFoundError("document", documentId);
       }
@@ -94,20 +107,24 @@ export function createDocumentService(deps: { db: DbClient; actorId: string }) {
         return toDocument(row);
       }
 
-      const updated = await tx
-        .update(documents)
-        .set({ title, content, revision: row.revision + 1, updatedAt: new Date() })
-        .where(eq(documents.id, documentId))
-        .returning();
-      const next = requireRow(updated, "documents update");
-      await recordRevision(tx, next, row.revision, actorId);
+      const next = requireRow(
+        [
+          tx
+            .update(documents)
+            .set({ title, content, revision: row.revision + 1, updatedAt: new Date() })
+            .where(eq(documents.id, documentId))
+            .returning()
+            .get()
+        ],
+        "documents update"
+      );
+      recordRevision(tx, next, row.revision, actorId);
       return toDocument(next);
     });
   }
 
-  async function get(documentId: string): Promise<Document> {
-    const rows = await db.select().from(documents).where(eq(documents.id, documentId)).limit(1);
-    const row = rows[0];
+  async function get(projectId: string, documentId: string): Promise<Document> {
+    const row = projectDb(projectId).select().from(documents).where(eq(documents.id, documentId)).get();
     if (row === undefined) {
       throw new NotFoundError("document", documentId);
     }
@@ -115,30 +132,32 @@ export function createDocumentService(deps: { db: DbClient; actorId: string }) {
   }
 
   async function list(projectId: string, page: PageRequest): Promise<Page<Document>> {
-    await assertProjectExists(db, projectId);
-    const rows = await db
+    const rows = projectDb(projectId)
       .select()
       .from(documents)
       .where(eq(documents.projectId, projectId))
       .orderBy(asc(documents.createdAt), asc(documents.id))
       .limit(page.limit + 1)
-      .offset(page.offset);
+      .offset(page.offset)
+      .all();
     return pageFromRows(rows, page, toDocument);
   }
 
   /** Revision history, newest first. Snapshots stay internal. */
-  async function listRevisions(documentId: string, page: PageRequest): Promise<Page<Revision>> {
-    const found = await db.select({ id: documents.id }).from(documents).where(eq(documents.id, documentId)).limit(1);
-    if (found.length === 0) {
+  async function listRevisions(projectId: string, documentId: string, page: PageRequest): Promise<Page<Revision>> {
+    const db = projectDb(projectId);
+    const exists = db.select({ id: documents.id }).from(documents).where(eq(documents.id, documentId)).get();
+    if (exists === undefined) {
       throw new NotFoundError("document", documentId);
     }
-    const rows = await db
+    const rows = db
       .select()
       .from(revisions)
-      .where(and(eq(revisions.resourceType, "document"), eq(revisions.resourceId, documentId)))
+      .where(eq(revisions.resourceId, documentId))
       .orderBy(desc(revisions.revision))
       .limit(page.limit + 1)
-      .offset(page.offset);
+      .offset(page.offset)
+      .all();
     return pageFromRows(rows, page, toRevision);
   }
 

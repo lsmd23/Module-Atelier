@@ -1,4 +1,6 @@
 export * from "./errors.ts";
+export * from "./json.ts";
+export * from "./sqlite-errors.ts";
 export * from "./query.ts";
 export * from "./mappers.ts";
 export * from "./users.ts";

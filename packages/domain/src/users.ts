@@ -1,11 +1,12 @@
 import { eq, sql } from "drizzle-orm";
 import { users } from "@module-atelier/db";
-import type { DbExecutor, UserRow } from "@module-atelier/db";
+import type { AppDatabase, AppUserRow } from "@module-atelier/db";
 
 /**
- * Account queries the API needs outside Better Auth's own endpoints: the
- * bootstrap rule (the first account is always admitted) and the last-login
- * timestamp shown in the account dialog.
+ * Account queries that live outside Better Auth's own endpoints: the first-run
+ * rule (an installation with no account shows the setup wizard) and the
+ * last-login timestamp the account dialog shows. These run against the app
+ * database, which is where accounts live.
  */
 
 /**
@@ -24,11 +25,13 @@ export function isPlaceholderEmail(email: string | null | undefined): boolean {
   return typeof email === "string" && email.toLowerCase().endsWith(`@${localEmailDomain}`);
 }
 
-export async function countUsers(executor: DbExecutor): Promise<number> {
-  const rows = await executor.select({ total: sql<number>`count(*)::int` }).from(users);
-  return rows[0]?.total ?? 0;
+export function countUsers(app: AppDatabase): number {
+  const rows = app.select({ total: sql<number>`count(*)` }).from(users).all();
+  return Number(rows[0]?.total ?? 0);
 }
 
-export async function touchLastLogin(executor: DbExecutor, userId: string): Promise<void> {
-  await executor.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, userId));
+export function touchLastLogin(app: AppDatabase, userId: string): void {
+  app.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, userId)).run();
 }
+
+export type { AppUserRow };

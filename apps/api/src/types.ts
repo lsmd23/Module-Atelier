@@ -1,15 +1,16 @@
-import type { Database } from "@module-atelier/db";
-import type { DocumentService, EntityService, ProjectService, RelationService } from "@module-atelier/domain";
+import type { AppDatabase, ProjectRegistry } from "@module-atelier/db";
+import type { ProjectService } from "@module-atelier/domain";
+import type { Auth } from "./auth/auth.ts";
 import type { SessionResolver } from "./auth/session-resolver.ts";
+import type { RateLimiter } from "./auth/rate-limit.ts";
 
-export type ApiServices = {
+export type ApiRouteDeps = {
+  appDb: AppDatabase;
   projects: ProjectService;
-  documents: DocumentService;
-  entities: EntityService;
-  relations: RelationService;
+  registry: ProjectRegistry;
+  sessionOf: SessionResolver;
+  auth: Auth;
+  /** Fallback identity for writes without a session, until roles land. */
+  actorId: string;
+  loginLimiter: RateLimiter;
 };
-
-export type HealthDeps = { pool: Database["pool"] };
-
-/** Services plus the per-request session lookup used for authorship. */
-export type ApiRouteDeps = ApiServices & { sessionOf: SessionResolver };

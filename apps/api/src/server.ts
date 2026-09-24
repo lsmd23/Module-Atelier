@@ -1,12 +1,6 @@
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
-import type { Database } from "@module-atelier/db";
-import { createDocumentService, createEntityService, createProjectService, createRelationService } from "@module-atelier/domain";
-import { createAuth } from "./auth/auth.ts";
-import { createAuthRateLimiters } from "./auth/rate-limit.ts";
-import type { AuthRateLimiters } from "./auth/rate-limit.ts";
-import { createSessionResolver } from "./auth/session-resolver.ts";
 import type { ApiConfig } from "./config.ts";
 import { notFoundResponse, toErrorResponse } from "./http.ts";
 import { registerAuthRoutes } from "./routes/auth.ts";
@@ -15,20 +9,19 @@ import { registerEntityRoutes } from "./routes/entities.ts";
 import { registerHealthRoutes } from "./routes/health.ts";
 import { registerProjectRoutes } from "./routes/projects.ts";
 import { registerRelationRoutes } from "./routes/relations.ts";
+import type { Runtime } from "./runtime.ts";
 import type { ApiRouteDeps } from "./types.ts";
 
 export type ServerDeps = {
   config: ApiConfig;
-  database: Database;
-  /** Test seam: share one limiter set so a suite can reset its windows. */
-  rateLimiters?: AuthRateLimiters;
+  runtime: Runtime;
 };
 
 /** Bodies are capped at 8 MiB; document content itself is capped by contract. */
 const bodyLimit = 8 * 1024 * 1024;
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
-  const { config, database } = deps;
+  const { config, runtime } = deps;
 
   const app = Fastify({
     logger: { level: config.logLevel },
@@ -36,23 +29,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     bodyLimit
   });
 
-  const auth = createAuth({
-    db: database.db,
-    config: {
-      secret: config.authSecret,
-      baseUrl: config.authBaseUrl,
-      trustedOrigins: config.trustedOrigins
-    }
-  });
-
-  const sessionOf = createSessionResolver(auth);
-
-  const services: ApiRouteDeps = {
-    projects: createProjectService({ db: database.db }),
-    documents: createDocumentService({ db: database.db, actorId: config.actorId }),
-    entities: createEntityService({ db: database.db, actorId: config.actorId }),
-    relations: createRelationService({ db: database.db }),
-    sessionOf
+  const routes: ApiRouteDeps = {
+    appDb: runtime.appDb,
+    projects: runtime.projects,
+    registry: runtime.registry,
+    sessionOf: runtime.sessionOf,
+    auth: runtime.auth,
+    actorId: config.actorId,
+    loginLimiter: runtime.loginLimiter
   };
 
   // Correlation id for support and logs; never contains author content.
@@ -63,7 +47,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.setErrorHandler((error, request, reply) => {
     const { statusCode, body } = toErrorResponse(error, request.id);
     if (statusCode >= 500) {
-      // Full error stays in the log; the client only receives the envelope.
       request.log.error({ err: error }, "request failed");
     } else {
       request.log.warn({ err: error, statusCode }, "request rejected");
@@ -75,16 +58,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     void reply.code(404).send(notFoundResponse(request.id, `${request.method} ${request.url}`));
   });
 
-  registerHealthRoutes(app, { pool: database.pool });
-  registerAuthRoutes(app, {
-    auth,
-    db: database.db,
-    rateLimiters: deps.rateLimiters ?? createAuthRateLimiters()
-  });
-  registerProjectRoutes(app, services);
-  registerDocumentRoutes(app, services);
-  registerEntityRoutes(app, services);
-  registerRelationRoutes(app, services);
+  registerHealthRoutes(app, { app: runtime.app });
+  registerAuthRoutes(app, routes);
+  registerProjectRoutes(app, routes);
+  registerDocumentRoutes(app, routes);
+  registerEntityRoutes(app, routes);
+  registerRelationRoutes(app, routes);
 
   return app;
 }

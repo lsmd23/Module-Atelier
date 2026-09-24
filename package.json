@@ -7,8 +7,6 @@
   },
   "scripts": {
     "dev": "pnpm --filter @module-atelier/api dev",
-    "db:generate": "pnpm --filter @module-atelier/db generate",
-    "db:migrate": "pnpm --filter @module-atelier/db migrate",
     "docker:frontend:config": "docker compose --env-file apps/web/frontend.env -f apps/web/docker-compose.yml config",
     "docker:frontend:up": "docker compose --env-file apps/web/frontend.env -f apps/web/docker-compose.yml up --build -d",
     "docker:frontend:down": "docker compose --env-file apps/web/frontend.env -f apps/web/docker-compose.yml down",

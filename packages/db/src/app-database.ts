@@ -127,7 +127,11 @@ export async function rebuildResourceIndex(
     try {
       project = await openProjectDatabase(layout.projectDatabase(entry.id));
       const rows = project.sqlite
-        .prepare("select id, 'document' as kind from documents union all select id, 'entity' as kind from entities")
+        .prepare(
+          "select id, 'document' as kind from documents " +
+            "union all select id, 'entity' as kind from entities " +
+            "union all select id, 'relation' as kind from relations"
+        )
         .all() as { id: string; kind: string }[];
       for (const row of rows) {
         const id = row.id;
@@ -159,10 +163,16 @@ export async function rebuildResourceIndex(
   return { indexed, skipped };
 }
 
+/** Which project owns this resource id? Undefined when the index does not know it. */
+export async function projectOfResourceId(db: AppDatabase, resourceId: string): Promise<string | undefined> {
+  const rows = await db.select().from(resourceIndex).where(eq(resourceIndex.id, resourceId)).limit(1);
+  return rows[0]?.projectId;
+}
+
 /** Records where a resource lives; returns nothing so callers stay simple. */
 export async function indexResource(
   db: AppDatabase,
-  entry: { id: string; projectId: string; resourceType: "document" | "entity" }
+  entry: { id: string; projectId: string; resourceType: "document" | "entity" | "relation" }
 ): Promise<void> {
   await db
     .insert(resourceIndex)

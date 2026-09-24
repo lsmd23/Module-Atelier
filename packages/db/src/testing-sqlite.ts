@@ -32,7 +32,10 @@ export async function createSqliteTestContext(): Promise<SqliteTestContext> {
   const root = mkdtempSync(join(tmpdir(), "module-atelier-test-"));
   const { layout } = ensureDataDirectory(root);
   const app = await openMigratedAppDatabase(layout.appDatabase);
-  const registry = createProjectRegistry({ layout });
+  // Suites hold one project handle for the whole file, so nothing may be
+  // evicted while a test runs. The production cap exists to bound file handles
+  // in a long-running app, where services are built per request instead.
+  const registry = createProjectRegistry({ layout, maxOpen: 100 });
 
   return {
     root,

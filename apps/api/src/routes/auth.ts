@@ -9,15 +9,13 @@ import {
   updateProfileRequestSchema
 } from "@module-atelier/contracts";
 import type { AccountSession } from "@module-atelier/contracts";
-import type { DbClient } from "@module-atelier/db";
 import { countUsers, placeholderEmail, touchLastLogin } from "@module-atelier/domain";
 import type { PageRequest } from "@module-atelier/domain";
 import type { Auth, SessionContext } from "../auth/auth.ts";
 import { readSession, toWebHeaders } from "../auth/auth.ts";
 import { authErrorStatusCode, isAuthApiError, mapAuthError } from "../auth/errors.ts";
 import { toAccountSession, toAccountUser } from "../auth/mappers.ts";
-import { createAuthRateLimiters } from "../auth/rate-limit.ts";
-import type { AuthRateLimiters } from "../auth/rate-limit.ts";
+import type { RateLimiter } from "../auth/rate-limit.ts";
 import { AuthFailureError, pageRequest, parseInput, unauthenticated } from "../http.ts";
 
 /**
@@ -33,14 +31,14 @@ import { AuthFailureError, pageRequest, parseInput, unauthenticated } from "../h
  * and the API reports `email: null` for it.
  */
 
+/** Auth routes need the app database (accounts live there) and the sign-in limiter. */
 export type AuthRouteDeps = {
   auth: Auth;
-  db: DbClient;
-  /** Defaults to a fresh in-process set; tests may share or replace it. */
-  rateLimiters?: AuthRateLimiters;
+  appDb: import("@module-atelier/db").AppDatabase;
+  loginLimiter: RateLimiter;
 };
 
-function enforceRateLimit(limiter: AuthRateLimiters["login"], key: string): void {
+function enforceRateLimit(limiter: RateLimiter, key: string): void {
   const decision = limiter.consume(key.toLowerCase());
   if (!decision.allowed) {
     throw new AuthFailureError({
@@ -115,18 +113,16 @@ async function requireSession(deps: AuthRouteDeps, request: FastifyRequest): Pro
 }
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
-  const limiters = deps.rateLimiters ?? createAuthRateLimiters();
-
   /** The first-run wizard asks this before it decides to show itself. */
   app.get(apiRoutes.authSetupStatus, async () => {
-    const users = await countUsers(deps.db);
+    const users = countUsers(deps.appDb);
     return { data: { needsSetup: users === 0 } };
   });
 
   app.post(apiRoutes.authSetup, async (request, reply) => {
     const body = parseInput(setupRequestSchema, request.body);
 
-    const existingUsers = await countUsers(deps.db);
+    const existingUsers = countUsers(deps.appDb);
     if (existingUsers > 0) {
       // One installation, one owner: this port closes once it exists.
       throw new AuthFailureError({
@@ -149,14 +145,14 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     if (session === null) {
       return { data: { session: null } };
     }
-    await touchLastLogin(deps.db, session.userId);
+    touchLastLogin(deps.appDb, session.userId);
     reply.code(201);
     return { data: { session: { user: toAccountUser(session.user), sessionId: session.sessionId } } };
   });
 
   app.post(apiRoutes.authLogin, async (request, reply) => {
     const body = parseInput(loginRequestSchema, request.body);
-    enforceRateLimit(limiters.login, `${request.ip}|${body.username}`);
+    enforceRateLimit(deps.loginLimiter, `${request.ip}|${body.username}`);
 
     const result = await runAuth(
       () =>
@@ -172,7 +168,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     if (session === null) {
       throw unauthenticated();
     }
-    await touchLastLogin(deps.db, session.userId);
+    touchLastLogin(deps.appDb, session.userId);
     return { data: { session: { user: toAccountUser(session.user), sessionId: session.sessionId } } };
   });
 

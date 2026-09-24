@@ -11,20 +11,18 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "generate": "drizzle-kit generate",
-    "migrate": "node --env-file-if-exists=../../.env src/migrate-cli.ts"
+    "generate:project": "drizzle-kit generate --config drizzle.sqlite.config.ts",
+    "generate:app": "drizzle-kit generate --config drizzle.app.config.ts"
   },
   "dependencies": {
     "@module-atelier/contracts": "workspace:*",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.2",
-    "pg": "^8.23.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.9.2",
-    "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.10",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

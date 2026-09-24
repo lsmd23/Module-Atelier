@@ -1,5 +1,4 @@
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import * as projectSchema from "./schema-sqlite.ts";
+import type { ProjectDatabase } from "./sqlite.ts";
 
 /**
  * Transaction helper for the synchronous SQLite driver.
@@ -18,8 +17,6 @@ import * as projectSchema from "./schema-sqlite.ts";
  * - the wrapper throws at runtime if a thenable comes back anyway (a cast, a
  *   helper typed too loosely), so it cannot become a silent commit.
  */
-
-export type ProjectDatabase = BetterSQLite3Database<typeof projectSchema>;
 
 type ProjectTransaction = Parameters<Parameters<ProjectDatabase["transaction"]>[0]>[0];
 
@@ -48,3 +45,4 @@ export function inTransaction<T>(db: ProjectDatabase, work: (tx: ProjectTransact
 
 /** Re-exported so callers can type their helpers without importing drizzle. */
 export type { ProjectTransaction };
+export type { ProjectDatabase };

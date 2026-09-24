@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import type { Entity, EntityStatus, EntityType, Revision } from "@module-atelier/contracts";
 import { entities, revisions } from "@module-atelier/db";
-import type { DbClient, DbTransaction, EntityRow } from "@module-atelier/db";
+import { inTransaction } from "@module-atelier/db";
+import type { EntityRowSqlite, ProjectDatabase, ProjectRegistry, ProjectTransaction } from "@module-atelier/db";
 import { NotFoundError, RevisionConflictError } from "./errors.ts";
+import { canonicalJson, parseJsonArray, parseJsonObject } from "./json.ts";
 import { toEntity, toEntitySnapshot, toRevision } from "./mappers.ts";
-import { assertProjectExists } from "./projects.ts";
 import { pageFromRows, requireRow } from "./query.ts";
 import type { Page, PageRequest } from "./query.ts";
 
@@ -26,92 +27,88 @@ export type UpdateEntityInput = {
   status?: EntityStatus;
 };
 
-function sameStrings(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
 /**
  * `structuredData` is replaced wholesale by an update, never deep-merged:
- * partial merges of JSONB are ambiguous and would hide concurrent edits.
+ * partial merges of JSON are ambiguous and would hide concurrent edits.
+ *
+ * Change detection compares canonical JSON in the application. PostgreSQL's
+ * `jsonb` normalised key order, which let the database decide whether a write
+ * changed anything; SQLite stores what was written, so the comparison is done
+ * here, independent of the storage engine and of key order.
  */
-export function createEntityService(deps: { db: DbClient; actorId: string }) {
-  const { db, actorId } = deps;
+/**
+ * The service is application-wide: one project is one database file, so every
+ * call names the project it works on and the registry supplies that file. A
+ * project that does not exist is reported as not found, never guessed at.
+ */
+export function createEntityService(deps: { registry: ProjectRegistry; actorId: string }) {
+  const { registry } = deps;
 
-  async function recordRevision(
-    tx: DbTransaction,
-    row: EntityRow,
-    baseRevision: number,
-    actor: string
-  ): Promise<void> {
-    await tx.insert(revisions).values({
-      projectId: row.projectId,
-      resourceType: "entity",
-      resourceId: row.id,
-      revision: row.revision,
-      baseRevision,
-      authorId: actor,
-      snapshot: toEntitySnapshot(row)
-    });
+  function projectDb(projectId: string): ProjectDatabase {
+    if (!registry.exists(projectId)) {
+      throw new NotFoundError("project", projectId);
+    }
+    return registry.open(projectId).db;
   }
 
-  /**
-   * Compares JSONB in PostgreSQL: `jsonb` normalizes key order, so a plain
-   * `JSON.stringify` comparison would report false changes.
-   */
-  async function structuredDataMatches(
-    tx: DbTransaction,
-    entityId: string,
-    candidate: Record<string, unknown>
-  ): Promise<boolean> {
-    const rows = await tx
-      .select({ same: sql<boolean>`${entities.structuredData} = ${JSON.stringify(candidate)}::jsonb` })
-      .from(entities)
-      .where(eq(entities.id, entityId))
-      .limit(1);
-    const row = rows[0];
-    return row === undefined ? false : row.same;
+  function recordRevision(
+    tx: ProjectTransaction,
+    row: EntityRowSqlite,
+    baseRevision: number,
+    actor: string
+  ): void {
+    tx.insert(revisions)
+      .values({
+        projectId: row.projectId,
+        resourceType: "entity",
+        resourceId: row.id,
+        revision: row.revision,
+        baseRevision,
+        authorId: actor,
+        snapshot: JSON.stringify(toEntitySnapshot(row))
+      })
+      .run();
   }
 
   /** New entities default to `draft`: nothing becomes canon by accident. */
-  /** `actorId` defaults to the identity the service was built with. */
   async function create(
     projectId: string,
     input: CreateEntityInput,
     actorId: string = deps.actorId
   ): Promise<Entity> {
-    return db.transaction(async (tx) => {
-      await assertProjectExists(tx, projectId);
-      const inserted = await tx
-        .insert(entities)
-        .values({
-          projectId,
-          type: input.type,
-          name: input.name,
-          aliases: input.aliases ?? [],
-          description: input.description ?? "",
-          structuredData: input.structuredData ?? {},
-          status: input.status ?? "draft"
-        })
-        .returning();
-      const row = requireRow(inserted, "entities insert");
-      await recordRevision(tx, row, 0, actorId);
+    return inTransaction(projectDb(projectId), (tx) => {
+      const row = requireRow(
+        [
+          tx
+            .insert(entities)
+            .values({
+              projectId,
+              type: input.type,
+              name: input.name,
+              aliases: JSON.stringify(input.aliases ?? []),
+              description: input.description ?? "",
+              structuredData: JSON.stringify(input.structuredData ?? {}),
+              status: input.status ?? "draft"
+            })
+            .returning()
+            .get()
+        ],
+        "entities insert"
+      );
+      recordRevision(tx, row, 0, actorId);
       return toEntity(row);
     });
   }
 
-  /**
-   * Same optimistic concurrency contract as documents: row lock, `baseRevision`
-   * check, revision row in the same transaction, and no revision bump when the
-   * update does not change anything.
-   */
+  /** Same optimistic concurrency contract as documents. */
   async function update(
+    projectId: string,
     entityId: string,
     input: UpdateEntityInput,
     actorId: string = deps.actorId
   ): Promise<Entity> {
-    return db.transaction(async (tx) => {
-      const found = await tx.select().from(entities).where(eq(entities.id, entityId)).for("update").limit(1);
-      const row = found[0];
+    return inTransaction(projectDb(projectId), (tx) => {
+      const row = tx.select().from(entities).where(eq(entities.id, entityId)).get();
       if (row === undefined) {
         throw new NotFoundError("entity", entityId);
       }
@@ -126,45 +123,53 @@ export function createEntityService(deps: { db: DbClient; actorId: string }) {
       }
 
       const name = input.name ?? row.name;
-      const aliases = input.aliases ?? [...row.aliases];
+      const aliases = input.aliases ?? parseJsonArray(row.aliases);
       const description = input.description ?? row.description;
       const status = input.status ?? row.status;
       const structuredDataUnchanged =
-        input.structuredData === undefined ? true : await structuredDataMatches(tx, entityId, input.structuredData);
+        input.structuredData === undefined
+          ? true
+          : canonicalJson(parseJsonObject(row.structuredData)) === canonicalJson(input.structuredData);
 
       const unchanged =
         name === row.name &&
         description === row.description &&
         status === row.status &&
         structuredDataUnchanged &&
-        sameStrings(aliases, row.aliases);
+        canonicalJson(aliases) === canonicalJson(parseJsonArray(row.aliases));
 
       if (unchanged) {
         return toEntity(row);
       }
 
-      const updated = await tx
-        .update(entities)
-        .set({
-          name,
-          aliases,
-          description,
-          status,
-          ...(input.structuredData === undefined ? {} : { structuredData: input.structuredData }),
-          revision: row.revision + 1,
-          updatedAt: new Date()
-        })
-        .where(eq(entities.id, entityId))
-        .returning();
-      const next = requireRow(updated, "entities update");
-      await recordRevision(tx, next, row.revision, actorId);
+      const next = requireRow(
+        [
+          tx
+            .update(entities)
+            .set({
+              name,
+              aliases: JSON.stringify(aliases),
+              description,
+              status,
+              ...(input.structuredData === undefined
+                ? {}
+                : { structuredData: JSON.stringify(input.structuredData) }),
+              revision: row.revision + 1,
+              updatedAt: new Date()
+            })
+            .where(eq(entities.id, entityId))
+            .returning()
+            .get()
+        ],
+        "entities update"
+      );
+      recordRevision(tx, next, row.revision, actorId);
       return toEntity(next);
     });
   }
 
-  async function get(entityId: string): Promise<Entity> {
-    const rows = await db.select().from(entities).where(eq(entities.id, entityId)).limit(1);
-    const row = rows[0];
+  async function get(projectId: string, entityId: string): Promise<Entity> {
+    const row = projectDb(projectId).select().from(entities).where(eq(entities.id, entityId)).get();
     if (row === undefined) {
       throw new NotFoundError("entity", entityId);
     }
@@ -172,29 +177,31 @@ export function createEntityService(deps: { db: DbClient; actorId: string }) {
   }
 
   async function list(projectId: string, page: PageRequest): Promise<Page<Entity>> {
-    await assertProjectExists(db, projectId);
-    const rows = await db
+    const rows = projectDb(projectId)
       .select()
       .from(entities)
       .where(eq(entities.projectId, projectId))
       .orderBy(asc(entities.createdAt), asc(entities.id))
       .limit(page.limit + 1)
-      .offset(page.offset);
+      .offset(page.offset)
+      .all();
     return pageFromRows(rows, page, toEntity);
   }
 
-  async function listRevisions(entityId: string, page: PageRequest): Promise<Page<Revision>> {
-    const found = await db.select({ id: entities.id }).from(entities).where(eq(entities.id, entityId)).limit(1);
-    if (found.length === 0) {
+  async function listRevisions(projectId: string, entityId: string, page: PageRequest): Promise<Page<Revision>> {
+    const db = projectDb(projectId);
+    const exists = db.select({ id: entities.id }).from(entities).where(eq(entities.id, entityId)).get();
+    if (exists === undefined) {
       throw new NotFoundError("entity", entityId);
     }
-    const rows = await db
+    const rows = db
       .select()
       .from(revisions)
-      .where(and(eq(revisions.resourceType, "entity"), eq(revisions.resourceId, entityId)))
+      .where(eq(revisions.resourceId, entityId))
       .orderBy(desc(revisions.revision))
       .limit(page.limit + 1)
-      .offset(page.offset);
+      .offset(page.offset)
+      .all();
     return pageFromRows(rows, page, toRevision);
   }
 

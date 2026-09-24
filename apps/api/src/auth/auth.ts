@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { username } from "better-auth/plugins";
 import { accounts, sessions, users, verifications } from "@module-atelier/db";
-import type { DbClient } from "@module-atelier/db";
+import type { AppDatabase } from "@module-atelier/db";
 
 /**
  * Better Auth wiring (BE-002 phase 1).
@@ -26,7 +26,7 @@ export type AuthConfig = {
   trustedOrigins: string[];
 };
 
-export function createAuth(deps: { db: DbClient; config: AuthConfig }) {
+export function createAuth(deps: { db: AppDatabase; config: AuthConfig }) {
   const { db, config } = deps;
 
   return betterAuth({
@@ -34,7 +34,7 @@ export function createAuth(deps: { db: DbClient; config: AuthConfig }) {
     baseURL: config.baseUrl,
     trustedOrigins: config.trustedOrigins,
     database: drizzleAdapter(db, {
-      provider: "pg",
+      provider: "sqlite",
       /**
        * `verifications` stays even though nothing is emailed: Better Auth uses
        * that table internally and refuses to start when it is missing.

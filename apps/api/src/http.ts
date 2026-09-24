@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { apiErrorStatus, apiLimits } from "@module-atelier/contracts";
 import type { ApiError, ApiErrorCode, ApiErrorDetails, FieldIssue } from "@module-atelier/contracts";
-import { pgErrorCode, pgErrorCodes } from "@module-atelier/db";
+import { constraintViolation } from "@module-atelier/domain";
 import { DomainConstraintError, NotFoundError, RevisionConflictError } from "@module-atelier/domain";
 import type { PageRequest } from "@module-atelier/domain";
 import type { AuthFailure } from "./auth/errors.ts";
@@ -141,12 +141,7 @@ export function toErrorResponse(error: unknown, requestId: string): ErrorRespons
     };
   }
 
-  const code = pgErrorCode(error);
-  if (
-    code === pgErrorCodes.uniqueViolation ||
-    code === pgErrorCodes.foreignKeyViolation ||
-    code === pgErrorCodes.checkViolation
-  ) {
+  if (constraintViolation(error)) {
     return {
       statusCode: apiErrorStatus.DOMAIN_CONSTRAINT,
       body: envelopeError("DOMAIN_CONSTRAINT", "the request violates a stored domain constraint", requestId)

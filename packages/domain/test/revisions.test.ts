@@ -1,5 +1,5 @@
-import { createTestContext } from "@module-atelier/db/testing";
-import type { TestContext } from "@module-atelier/db/testing";
+import { createSqliteTestContext } from "@module-atelier/db/testing-sqlite";
+import type { SqliteTestContext } from "@module-atelier/db/testing-sqlite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   NotFoundError,
@@ -17,16 +17,17 @@ import {
 
 const actorId = "test-actor";
 
-let context: TestContext;
+let context: SqliteTestContext;
 let projects: ReturnType<typeof createProjectService>;
 let documents: ReturnType<typeof createDocumentService>;
 let entities: ReturnType<typeof createEntityService>;
 
 beforeAll(async () => {
-  context = await createTestContext();
-  projects = createProjectService({ db: context.db });
-  documents = createDocumentService({ db: context.db, actorId });
-  entities = createEntityService({ db: context.db, actorId });
+  context = await createSqliteTestContext();
+  projects = createProjectService({ appDb: context.app.db, registry: context.registry, layout: context.layout });
+  documents = createDocumentService({ registry: context.registry, actorId });
+  entities = createEntityService({ registry: context.registry, actorId });
+
 });
 
 beforeEach(async () => {
@@ -53,7 +54,7 @@ describe("document revisions", () => {
 
     expect(document.revision).toBe(1);
 
-    const history = await documents.listRevisions(document.id, { limit: 10, offset: 0 });
+    const history = await documents.listRevisions(project.id, document.id, { limit: 10, offset: 0 });
     expect(history.items).toHaveLength(1);
     const first = history.items[0];
     expect(first?.revision).toBe(1);
@@ -66,10 +67,10 @@ describe("document revisions", () => {
     const project = await projects.create({ name: "P" });
     const document = await documents.create(project.id, { title: "第一章", content: "初稿" });
 
-    const updated = await documents.update(document.id, { baseRevision: 1, content: "二稿" });
+    const updated = await documents.update(project.id, document.id, { baseRevision: 1, content: "二稿" });
     expect(updated.revision).toBe(2);
 
-    const history = await documents.listRevisions(document.id, { limit: 10, offset: 0 });
+    const history = await documents.listRevisions(project.id, document.id, { limit: 10, offset: 0 });
     expect(history.items.map((item) => item.revision)).toEqual([2, 1]);
     expect(history.items[0]?.baseRevision).toBe(1);
   });
@@ -77,9 +78,9 @@ describe("document revisions", () => {
   it("rejects a stale baseRevision and leaves newer content untouched", async () => {
     const project = await projects.create({ name: "P" });
     const document = await documents.create(project.id, { title: "第一章", content: "初稿" });
-    await documents.update(document.id, { baseRevision: 1, content: "作者的新稿" });
+    await documents.update(project.id, document.id, { baseRevision: 1, content: "作者的新稿" });
 
-    const error = await capture(documents.update(document.id, { baseRevision: 1, content: "旧标签页的稿" }));
+    const error = await capture(documents.update(project.id, document.id, { baseRevision: 1, content: "旧标签页的稿" }));
 
     expect(error).toBeInstanceOf(RevisionConflictError);
     const conflict = (error as RevisionConflictError).conflict;
@@ -91,7 +92,7 @@ describe("document revisions", () => {
       actualRevision: 2
     });
 
-    const stored = await documents.get(document.id);
+    const stored = await documents.get(project.id, document.id);
     expect(stored.content).toBe("作者的新稿");
     expect(stored.revision).toBe(2);
   });
@@ -100,10 +101,10 @@ describe("document revisions", () => {
     const project = await projects.create({ name: "P" });
     const document = await documents.create(project.id, { title: "第一章", content: "初稿" });
 
-    const repeated = await documents.update(document.id, { baseRevision: 1, content: "初稿" });
+    const repeated = await documents.update(project.id, document.id, { baseRevision: 1, content: "初稿" });
 
     expect(repeated.revision).toBe(1);
-    const history = await documents.listRevisions(document.id, { limit: 10, offset: 0 });
+    const history = await documents.listRevisions(project.id, document.id, { limit: 10, offset: 0 });
     expect(history.items).toHaveLength(1);
   });
 
@@ -112,8 +113,8 @@ describe("document revisions", () => {
     const document = await documents.create(project.id, { title: "第一章", content: "初稿" });
 
     const results = await Promise.allSettled([
-      documents.update(document.id, { baseRevision: 1, content: "标签页 A" }),
-      documents.update(document.id, { baseRevision: 1, content: "标签页 B" })
+      documents.update(project.id, document.id, { baseRevision: 1, content: "标签页 A" }),
+      documents.update(project.id, document.id, { baseRevision: 1, content: "标签页 B" })
     ]);
 
     const fulfilled = results.filter((result) => result.status === "fulfilled");
@@ -122,13 +123,14 @@ describe("document revisions", () => {
     expect(rejected).toHaveLength(1);
     expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(RevisionConflictError);
 
-    const stored = await documents.get(document.id);
+    const stored = await documents.get(project.id, document.id);
     expect(stored.revision).toBe(2);
     expect(["标签页 A", "标签页 B"]).toContain(stored.content);
   });
 
   it("reports a missing document as not found", async () => {
-    const error = await capture(documents.get("00000000-0000-4000-8000-000000000000"));
+    const project = await projects.create({ name: "P" });
+    const error = await capture(documents.get(project.id, "00000000-0000-4000-8000-000000000000"));
     expect(error).toBeInstanceOf(NotFoundError);
   });
 });
@@ -152,7 +154,7 @@ describe("entity revisions", () => {
       structuredData: { ac: 15, hp: 7 }
     });
 
-    const updated = await entities.update(entity.id, {
+    const updated = await entities.update(project.id, entity.id, {
       baseRevision: 1,
       structuredData: { ac: 15, hp: 7, speed: 30 }
     });
@@ -169,7 +171,7 @@ describe("entity revisions", () => {
       structuredData: { armorClass: 15, hitPoints: 7 }
     });
 
-    const repeated = await entities.update(entity.id, {
+    const repeated = await entities.update(project.id, entity.id, {
       baseRevision: 1,
       structuredData: { hitPoints: 7, armorClass: 15 }
     });
@@ -180,23 +182,23 @@ describe("entity revisions", () => {
   it("rejects a stale baseRevision", async () => {
     const project = await projects.create({ name: "P" });
     const entity = await entities.create(project.id, { type: "npc", name: "村长" });
-    await entities.update(entity.id, { baseRevision: 1, status: "confirmed" });
+    await entities.update(project.id, entity.id, { baseRevision: 1, status: "confirmed" });
 
-    const error = await capture(entities.update(entity.id, { baseRevision: 1, name: "村长（旧）" }));
+    const error = await capture(entities.update(project.id, entity.id, { baseRevision: 1, name: "村长（旧）" }));
 
     expect(error).toBeInstanceOf(RevisionConflictError);
     expect((error as RevisionConflictError).conflict.actualRevision).toBe(2);
-    const stored = await entities.get(entity.id);
+    const stored = await entities.get(project.id, entity.id);
     expect(stored.name).toBe("村长");
   });
 
   it("keeps entity history newest first", async () => {
     const project = await projects.create({ name: "P" });
     const entity = await entities.create(project.id, { type: "npc", name: "村长" });
-    await entities.update(entity.id, { baseRevision: 1, name: "村长·改" });
-    await entities.update(entity.id, { baseRevision: 2, name: "村长·再改" });
+    await entities.update(project.id, entity.id, { baseRevision: 1, name: "村长·改" });
+    await entities.update(project.id, entity.id, { baseRevision: 2, name: "村长·再改" });
 
-    const history = await entities.listRevisions(entity.id, { limit: 10, offset: 0 });
+    const history = await entities.listRevisions(project.id, entity.id, { limit: 10, offset: 0 });
     expect(history.items.map((item) => item.revision)).toEqual([3, 2, 1]);
   });
 });

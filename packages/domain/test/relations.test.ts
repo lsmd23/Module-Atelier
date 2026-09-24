@@ -1,5 +1,5 @@
-import { createTestContext } from "@module-atelier/db/testing";
-import type { TestContext } from "@module-atelier/db/testing";
+import { createSqliteTestContext } from "@module-atelier/db/testing-sqlite";
+import type { SqliteTestContext } from "@module-atelier/db/testing-sqlite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   DomainConstraintError,
@@ -12,18 +12,19 @@ import {
 
 /** Relations, project boundaries and list scoping. */
 
-let context: TestContext;
+let context: SqliteTestContext;
 let projects: ReturnType<typeof createProjectService>;
 let documents: ReturnType<typeof createDocumentService>;
 let entities: ReturnType<typeof createEntityService>;
 let relations: ReturnType<typeof createRelationService>;
 
 beforeAll(async () => {
-  context = await createTestContext();
-  projects = createProjectService({ db: context.db });
-  documents = createDocumentService({ db: context.db, actorId: "test-actor" });
-  entities = createEntityService({ db: context.db, actorId: "test-actor" });
-  relations = createRelationService({ db: context.db });
+  context = await createSqliteTestContext();
+  projects = createProjectService({ appDb: context.app.db, registry: context.registry, layout: context.layout });
+  documents = createDocumentService({ registry: context.registry, actorId: "test-actor" });
+  entities = createEntityService({ registry: context.registry, actorId: "test-actor" });
+  relations = createRelationService({ registry: context.registry });
+
 });
 
 beforeEach(async () => {
@@ -58,9 +59,9 @@ describe("relations", () => {
     await relations.create(projectId, { fromEntityId: mayor, toEntityId: mine, type: "knows_about" });
     await relations.create(projectId, { fromEntityId: clue.id, toEntityId: mayor, type: "implicates" });
 
-    const outgoing = await relations.listForEntity(mayor, { limit: 10, offset: 0, direction: "outgoing" });
-    const incoming = await relations.listForEntity(mayor, { limit: 10, offset: 0, direction: "incoming" });
-    const both = await relations.listForEntity(mayor, { limit: 10, offset: 0 });
+    const outgoing = await relations.listForEntity(projectId, mayor, { limit: 10, offset: 0, direction: "outgoing" });
+    const incoming = await relations.listForEntity(projectId, mayor, { limit: 10, offset: 0, direction: "incoming" });
+    const both = await relations.listForEntity(projectId, mayor, { limit: 10, offset: 0 });
 
     expect(outgoing.items.map((item) => item.relation.type)).toEqual(["knows_about"]);
     expect(incoming.items.map((item) => item.relation.type)).toEqual(["implicates"]);
@@ -89,7 +90,7 @@ describe("relations", () => {
     );
 
     expect(error).toBeInstanceOf(NotFoundError);
-    expect((error as NotFoundError).detail).toContain(projectId);
+    expect((error as NotFoundError).detail).toContain("no such entity in this project");
   });
 
   it("refuses an endpoint that does not exist", async () => {
@@ -123,9 +124,9 @@ describe("relations", () => {
       type: "knows_about"
     });
 
-    await expect(relations.remove(relation.id)).resolves.toEqual({ id: relation.id });
+    await expect(relations.remove(projectId, relation.id)).resolves.toEqual({ id: relation.id });
 
-    const error = await capture(relations.remove(relation.id));
+    const error = await capture(relations.remove(projectId, relation.id));
     expect(error).toBeInstanceOf(NotFoundError);
   });
 });

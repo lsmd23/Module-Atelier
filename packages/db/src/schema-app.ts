@@ -120,6 +120,7 @@ export const projectIndex = sqliteTable(
     name: text("name").notNull(),
     path: text("path").notNull(),
     createdAt: createdAt(),
+    updatedAt: updatedAt(),
     lastOpenedAt: integer("last_opened_at", { mode: "timestamp_ms" })
   },
   (table) => [unique("project_index_path_unique").on(table.path)]

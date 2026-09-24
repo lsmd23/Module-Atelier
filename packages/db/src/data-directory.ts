@@ -19,17 +19,7 @@ export const optionsSchema = z.object({
   /** HTTP port the desktop window or browser connects to. */
   port: z.number().int().min(1).max(65535).default(30017),
   host: z.string().min(1).default("127.0.0.1"),
-  /** Mail settings for verification codes; empty until a mailbox is provided. */
-  mail: z
-    .object({
-      transport: z.enum(["log", "smtp"]).default("log"),
-      host: z.string().default(""),
-      port: z.number().int().min(1).max(65535).default(587),
-      secure: z.boolean().default(false),
-      user: z.string().default(""),
-      from: z.string().default("")
-    })
-    .default({}),
+  /* No mail settings: accounts are local and nothing is ever emailed. */
   /** Keep automatic backups under data/backups/ (0 disables them). */
   backupKeep: z.number().int().min(0).default(5)
 });

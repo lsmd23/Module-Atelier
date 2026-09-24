@@ -61,9 +61,22 @@ cache a connection per project instead of holding one global handle.
 ## Engine and dialect
 
 **SQLite** through Drizzle + `better-sqlite3` (prebuilt binaries, so packaging is
-straightforward). A single app process with a single writer matches the "one
+straightforward, and no cloud lineage: it is the embedded database desktop
+applications ship). A single app process with a single writer matches the "one
 author at a time" usage we are designing for; WAL mode allows concurrent reads
 while a write is in flight.
+
+better-sqlite3 is synchronous, and its Drizzle transaction callback therefore
+returns the result directly — an `async` body would commit early and continue
+outside the transaction, silently losing atomicity, with no type error to warn
+anyone. Everything that writes more than one row goes through
+`inTransaction` (`packages/db/src/transaction.ts`), which rejects a
+promise-returning body at compile time and throws at runtime if a thenable slips
+through a cast. Two alternatives were measured and rejected: `@libsql/client`
+works and supports async transactions, but it is Turso's client, which is a
+cloud-shaped dependency for a purely local product; `node:sqlite` is built into
+the runtime (zero dependencies) but Drizzle has no driver for it, and a
+`sqlite-proxy` adapter failed on the insert path when prototyped.
 
 PostgreSQL features map as follows:
 

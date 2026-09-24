@@ -36,7 +36,6 @@ describe("data directory", () => {
     const options = readOptions(first.layout);
     expect(options.port).toBe(30017);
     expect(options.host).toBe("127.0.0.1");
-    expect(options.mail.transport).toBe("log");
 
     const second = ensureDataDirectory(root);
     expect(second.created).toHaveLength(0);
@@ -45,9 +44,8 @@ describe("data directory", () => {
   it("round-trips options and rejects an invalid file with a readable error", () => {
     const layout = dataDirectoryLayout(root);
     const options = readOptions(layout);
-    writeOptions(layout, { ...options, port: 31234, mail: { ...options.mail, transport: "smtp", host: "smtp.example" } });
+    writeOptions(layout, { ...options, port: 31234 });
     expect(readOptions(layout).port).toBe(31234);
-    expect(readOptions(layout).mail.host).toBe("smtp.example");
 
     const backup = readFileSync(layout.optionsFile, "utf8");
     writeFileSync(layout.optionsFile, '{ "port": 999999 }', "utf8");

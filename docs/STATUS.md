@@ -28,7 +28,7 @@ Important Contract Changes:
 
 Integration Risks:
 - Storage architecture is changing: PostgreSQL is being replaced by SQLite with one database per project (`docs/STORAGE.md`). Until BE-003 lands, the merged PostgreSQL schema and migration remain the running system.
-- `infra/docker-compose.yml` describes a server deployment that no longer matches the product shape (Platform/QA ownership; flagged, not removed).
+- The backend container deployment was removed with this change; `apps/web/{Dockerfile,Caddyfile,docker-compose.yml}` and the `docker:frontend:*` scripts still describe a container path and belong to the frontend owner to retire once the launcher replaces them.
 - Project routes are not yet role-guarded (BE-002 phase 2): a request without a session is still served and attributed to `DEFAULT_ACTOR_ID`, so the API must not be exposed publicly until phase 2 lands.
 - No mail transport: verification codes reach the API log, or the response when `AUTH_DEV_EXPOSE_CODE` is on (development only).
 - Entity and relation payloads carry no timestamps (contract gap, proposed as CCR-1).

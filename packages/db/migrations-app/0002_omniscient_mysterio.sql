@@ -1,0 +1,1 @@
+ALTER TABLE `project_index` ADD `updated_at` integer NOT NULL;

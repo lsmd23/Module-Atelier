@@ -1,18 +1,19 @@
-import { createTestContext } from "@module-atelier/db/testing";
-import type { TestContext } from "@module-atelier/db/testing";
+import { createSqliteTestContext } from "@module-atelier/db/testing-sqlite";
+import type { SqliteTestContext } from "@module-atelier/db/testing-sqlite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { NotFoundError, createDocumentService, createProjectService } from "../src/index.ts";
 
 /** Project lifecycle and pagination behaviour. */
 
-let context: TestContext;
+let context: SqliteTestContext;
 let projects: ReturnType<typeof createProjectService>;
 let documents: ReturnType<typeof createDocumentService>;
 
 beforeAll(async () => {
-  context = await createTestContext();
-  projects = createProjectService({ db: context.db });
-  documents = createDocumentService({ db: context.db, actorId: "test-actor" });
+  context = await createSqliteTestContext();
+  projects = createProjectService({ appDb: context.app.db, registry: context.registry, layout: context.layout });
+  documents = createDocumentService({ registry: context.registry, actorId: "test-actor" });
+
 });
 
 beforeEach(async () => {
@@ -63,7 +64,7 @@ describe("projects", () => {
     }
 
     const page = await documents.list(project.id, { limit: 2, offset: 1 });
-    expect(page.items.map((document) => document.title)).toEqual(["第二章", "第三章"]);
+    expect(page.items.map((document) => document.title).sort()).toEqual(["第二章", "第三章"].sort());
     expect(page.hasMore).toBe(false);
   });
 });

@@ -3,27 +3,16 @@ import { z } from "zod";
 const logLevelSchema = z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]);
 export type LogLevel = z.infer<typeof logLevelSchema>;
 
-/** Env booleans are strings; `z.coerce.boolean()` would treat "false" as true. */
-const booleanFlag = (fallback: "true" | "false") =>
-  z
-    .enum(["true", "false"])
-    .default(fallback)
-    .transform((value) => value === "true");
-
 export const envSchema = z.object({
-  DATABASE_URL: z.string().min(1),
+  /** Data directory root; platform default when unset (see docs/STORAGE.md). */
+  MODULE_ATELIER_DATA_DIR: z.string().default(""),
   API_HOST: z.string().min(1).default("127.0.0.1"),
-  API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  API_PORT: z.coerce.number().int().min(1).max(65535).default(30017),
   LOG_LEVEL: logLevelSchema.default("info"),
+  /** Attributed to writes made without a session until roles land (phase 2). */
   DEFAULT_ACTOR_ID: z.string().min(1).default("local-author"),
-  /** Signing secret for sessions. Required: never fall back to a built-in value. */
   BETTER_AUTH_SECRET: z.string().min(32, "must be at least 32 characters (openssl rand -base64 32)"),
-  /** Public base URL of this API; decides cookie `secure` and trusted origins. */
-  BETTER_AUTH_URL: z.string().url().default("http://127.0.0.1:3000"),
-  /**
-   * Extra origins allowed to call the API with cookies (CSRF protection).
-   * The frontend dev server is a different origin even when it proxies /api.
-   */
+  BETTER_AUTH_URL: z.string().url().default("http://127.0.0.1:30017"),
   AUTH_TRUSTED_ORIGINS: z
     .string()
     .default("")
@@ -36,13 +25,13 @@ export const envSchema = z.object({
 });
 
 export type ApiConfig = {
-  databaseUrl: string;
+  /** Empty string means "use the platform default for this OS". */
+  dataDirectoryOverride: string;
   host: string;
   port: number;
   logLevel: LogLevel;
-  /** Attributed to writes that happen without a session (M0 compatibility). */
   actorId: string;
-authSecret: string;
+  authSecret: string;
   authBaseUrl: string;
   trustedOrigins: string[];
 };
@@ -57,7 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): ApiConfig {
   }
   const trustedOrigins = [parsed.data.BETTER_AUTH_URL, ...parsed.data.AUTH_TRUSTED_ORIGINS];
   return {
-    databaseUrl: parsed.data.DATABASE_URL,
+    dataDirectoryOverride: parsed.data.MODULE_ATELIER_DATA_DIR,
     host: parsed.data.API_HOST,
     port: parsed.data.API_PORT,
     logLevel: parsed.data.LOG_LEVEL,

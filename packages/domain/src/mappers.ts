@@ -1,29 +1,23 @@
 import type { AccountUser, Document, Entity, Project, Relation, Revision } from "@module-atelier/contracts";
 import { accountPlans, accountRoles, accountStatuses } from "@module-atelier/contracts";
+import type {
+  AppUserRow,
+  DocumentRowSqlite,
+  EntityRowSqlite,
+  ProjectRowSqlite,
+  RelationRowSqlite,
+  RevisionRowSqlite
+} from "@module-atelier/db";
+import { parseJsonArray, parseJsonObject } from "./json.ts";
 import { isPlaceholderEmail } from "./users.ts";
-import type { DocumentRow, EntityRow, ProjectRow, RelationRow, RevisionRow, UserRow } from "@module-atelier/db";
 
 /**
- * Row -> contract mapping. This is the only place where persistence shapes turn
- * into `@module-atelier/contracts` types, which keeps the API, the future
- * Agent services and the Publisher boundary on one model.
- *
- * Timestamps are `timestamptz` in PostgreSQL and always leave as UTC ISO
- * strings, so clients never parse a local-time value.
+ * Row -> contract mapping: the only place where storage shapes become
+ * `@module-atelier/contracts` types. Timestamps are stored as epoch
+ * milliseconds and always leave as UTC ISO strings.
  */
 
-/**
- * JSONB columns are declared `notNull` and guarded by a `jsonb_typeof(...)`
- * check, so a non-object value means real corruption and must not be masked.
- */
-function requireJsonObject(value: unknown, context: string): Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${context}: expected a JSON object`);
-  }
-  return value as Record<string, unknown>;
-}
-
-export function toProject(row: ProjectRow): Project {
+export function toProject(row: ProjectRowSqlite): Project {
   return {
     id: row.id,
     name: row.name,
@@ -32,7 +26,7 @@ export function toProject(row: ProjectRow): Project {
   };
 }
 
-export function toDocument(row: DocumentRow): Document {
+export function toDocument(row: DocumentRowSqlite): Document {
   return {
     id: row.id,
     projectId: row.projectId,
@@ -44,21 +38,21 @@ export function toDocument(row: DocumentRow): Document {
   };
 }
 
-export function toEntity(row: EntityRow): Entity {
+export function toEntity(row: EntityRowSqlite): Entity {
   return {
     id: row.id,
     projectId: row.projectId,
-    type: row.type,
+    type: row.type as Entity["type"],
     name: row.name,
-    aliases: [...row.aliases],
+    aliases: parseJsonArray(row.aliases),
     description: row.description,
-    structuredData: requireJsonObject(row.structuredData, `entity ${row.id}.structuredData`),
+    structuredData: parseJsonObject(row.structuredData),
     revision: row.revision,
-    status: row.status
+    status: row.status as Entity["status"]
   };
 }
 
-export function toRelation(row: RelationRow): Relation {
+export function toRelation(row: RelationRowSqlite): Relation {
   const base = {
     id: row.id,
     projectId: row.projectId,
@@ -66,15 +60,13 @@ export function toRelation(row: RelationRow): Relation {
     toEntityId: row.toEntityId,
     type: row.type
   };
-  return row.metadata === null
-    ? base
-    : { ...base, metadata: requireJsonObject(row.metadata, `relation ${row.id}.metadata`) };
+  return row.metadata === null ? base : { ...base, metadata: parseJsonObject(row.metadata) };
 }
 
-export function toRevision(row: RevisionRow): Revision {
+export function toRevision(row: RevisionRowSqlite): Revision {
   return {
     id: row.id,
-    resourceType: row.resourceType,
+    resourceType: row.resourceType as Revision["resourceType"],
     resourceId: row.resourceId,
     revision: row.revision,
     baseRevision: row.baseRevision,
@@ -84,11 +76,11 @@ export function toRevision(row: RevisionRow): Revision {
 }
 
 /**
- * Revision snapshots stored in the `revisions` table. Internal only: they are
- * the recovery path for a future restore feature and are not exposed by the
- * API contract.
+ * Revision snapshots: internal only, kept so a future restore feature has
+ * something to restore from. They are serialised into the snapshot column and
+ * never returned by the API.
  */
-export function toDocumentSnapshot(row: DocumentRow): Record<string, unknown> {
+export function toDocumentSnapshot(row: DocumentRowSqlite): Record<string, unknown> {
   const document = toDocument(row);
   return {
     id: document.id,
@@ -101,7 +93,7 @@ export function toDocumentSnapshot(row: DocumentRow): Record<string, unknown> {
   };
 }
 
-export function toEntitySnapshot(row: EntityRow): Record<string, unknown> {
+export function toEntitySnapshot(row: EntityRowSqlite): Record<string, unknown> {
   const entity = toEntity(row);
   return {
     id: entity.id,
@@ -118,13 +110,13 @@ export function toEntitySnapshot(row: EntityRow): Record<string, unknown> {
 
 /**
  * The database constrains role/plan/status to the contract's values, so the
- * fallbacks below only ever apply if that constraint is dropped by mistake.
+ * fallbacks only apply if that constraint were dropped by mistake.
  */
 function asMemberOf<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
   return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
 }
 
-export function toAccountUser(row: UserRow): AccountUser {
+export function toAccountUser(row: AppUserRow): AccountUser {
   return {
     id: row.id,
     username: row.username,

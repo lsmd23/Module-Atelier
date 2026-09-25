@@ -3,13 +3,24 @@ import {
   apiRoutes,
   changePasswordRequestSchema,
   loginRequestSchema,
+  createUserRequestSchema,
   pageQuerySchema,
   sessionParamsSchema,
   setupRequestSchema,
-  updateProfileRequestSchema
+  updateProfileRequestSchema,
+  updateUserRequestSchema,
+  userParamsSchema
 } from "@module-atelier/contracts";
 import type { AccountSession } from "@module-atelier/contracts";
-import { countUsers, placeholderEmail, touchLastLogin } from "@module-atelier/domain";
+import {
+  countUsers,
+  earliestUserId,
+  findUser,
+  listUsers,
+  placeholderEmail,
+  touchLastLogin,
+  updateUserFields
+} from "@module-atelier/domain";
 import type { PageRequest } from "@module-atelier/domain";
 import type { Auth, SessionContext } from "../auth/auth.ts";
 import { readSession, toWebHeaders } from "../auth/auth.ts";
@@ -112,6 +123,21 @@ async function requireSession(deps: AuthRouteDeps, request: FastifyRequest): Pro
   return session;
 }
 
+/**
+ * The administrator of a local installation is its first account: the person who
+ * ran the setup. Deriving the rule keeps it honest without a schema change, and
+ * it is what makes an owner-managed account list possible with no mail channel.
+ */
+function requireAdministrator(deps: AuthRouteDeps, session: SessionContext): void {
+  const administrator = earliestUserId(deps.appDb);
+  if (administrator === undefined || administrator !== session.userId) {
+    throw new AuthFailureError({
+      code: "FORBIDDEN",
+      message: "only the administrator of this installation manages accounts"
+    });
+  }
+}
+
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   /** The first-run wizard asks this before it decides to show itself. */
   app.get(apiRoutes.authSetupStatus, async () => {
@@ -178,6 +204,65 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     }
     touchLastLogin(deps.appDb, session.userId);
     return { data: { session: { user: toAccountUser(session.user), sessionId: session.sessionId } } };
+  });
+
+  app.get(apiRoutes.adminUsers, async (request) => {
+    const session = await requireSession(deps, request);
+    requireAdministrator(deps, session);
+
+    const query = parseInput(pageQuerySchema, request.query);
+    const page: PageRequest = pageRequest(query);
+    const rows = listUsers(deps.appDb, page.limit + 1, page.offset);
+    const hasMore = rows.length > page.limit;
+    const visible = hasMore ? rows.slice(0, page.limit) : rows;
+    return {
+      data: { items: visible.map(toAccountUser), limit: page.limit, offset: page.offset, hasMore }
+    };
+  });
+
+  app.post(apiRoutes.adminUsers, async (request, reply) => {
+    const session = await requireSession(deps, request);
+    requireAdministrator(deps, session);
+    const body = parseInput(createUserRequestSchema, request.body);
+
+    const created = await runAuth(() =>
+      deps.auth.api.signUpEmail({
+        body: {
+          email: placeholderEmail(body.username),
+          password: body.password,
+          name: body.displayName,
+          username: body.username
+        }
+      })
+    );
+
+    // The role is ours, not Better Auth's: sign-up cannot set additional fields,
+    // so the administrator's choice is written to the row directly. The session
+    // that sign-up may mint for the new account is deliberately not forwarded.
+    updateUserFields(deps.appDb, created.user.id, { role: body.role });
+    const row = findUser(deps.appDb, created.user.id);
+    if (row === undefined) {
+      throw new Error("the created account cannot be read back");
+    }
+    reply.code(201);
+    return { data: toAccountUser(row) };
+  });
+
+  app.patch(apiRoutes.adminUser, async (request) => {
+    const session = await requireSession(deps, request);
+    requireAdministrator(deps, session);
+    const params = parseInput(userParamsSchema, request.params);
+    const body = parseInput(updateUserRequestSchema, request.body);
+
+    if (findUser(deps.appDb, params.userId) === undefined) {
+      throw new AuthFailureError({ code: "NOT_FOUND", message: "account not found" });
+    }
+    updateUserFields(deps.appDb, params.userId, body);
+    const row = findUser(deps.appDb, params.userId);
+    if (row === undefined) {
+      throw new Error("the updated account cannot be read back");
+    }
+    return { data: toAccountUser(row) };
   });
 
   app.post(apiRoutes.authLogout, async (request, reply) => {

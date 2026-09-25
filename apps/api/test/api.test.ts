@@ -18,6 +18,7 @@ import {
   revisionListResponseSchema,
   sessionListResponseSchema,
   setupStatusResponseSchema,
+  userListResponseSchema,
   userResponseSchema
 } from "@module-atelier/contracts";
 import type { FastifyInstance } from "fastify";
@@ -506,6 +507,87 @@ describe("local accounts", () => {
 
     const me = await app.inject({ method: "GET", url: apiRoutes.authMe, headers: { cookie: jar.cookie } });
     expect(userResponseSchema.parse(me.json()).data.email).toBeNull();
+  });
+});
+
+describe("account administration", () => {
+  const scribe = { displayName: "誊写员", username: "scribe", password: "scribe-password-1", role: "collaborator" };
+
+  async function addScribe(jar: CookieJar) {
+    const created = await app.inject({
+      method: "POST",
+      url: apiRoutes.adminUsers,
+      headers: { cookie: jar.cookie },
+      payload: scribe
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    return userResponseSchema.parse(created.json()).data;
+  }
+
+  it("lets the administrator create an account that can then sign in", async () => {
+    const jar = await setupOwner();
+    const user = await addScribe(jar);
+
+    expect(user.username).toBe("scribe");
+    expect(user.role).toBe("collaborator");
+    expect(user.email).toBeNull();
+
+    const signIn = await app.inject({
+      method: "POST",
+      url: apiRoutes.authLogin,
+      payload: { username: scribe.username, password: scribe.password }
+    });
+    expect(signIn.statusCode, signIn.body).toBe(200);
+  });
+
+  it("refuses account management to anyone but the administrator", async () => {
+    const jar = await setupOwner();
+    await addScribe(jar);
+
+    const signIn = await app.inject({
+      method: "POST",
+      url: apiRoutes.authLogin,
+      payload: { username: scribe.username, password: scribe.password }
+    });
+    const otherJar = cookieFrom(signIn);
+
+    const forbidden = await app.inject({
+      method: "GET",
+      url: apiRoutes.adminUsers,
+      headers: { cookie: otherJar.cookie }
+    });
+    expect(forbidden.statusCode).toBe(403);
+    expect(apiErrorSchema.parse(forbidden.json()).error.code).toBe("FORBIDDEN");
+
+    const anonymous = await app.inject({ method: "GET", url: apiRoutes.adminUsers });
+    expect(anonymous.statusCode).toBe(401);
+  });
+
+  it("lists accounts and can rename, re-role and suspend one", async () => {
+    const jar = await setupOwner();
+    const created = await addScribe(jar);
+
+    const listed = await app.inject({ method: "GET", url: apiRoutes.adminUsers, headers: { cookie: jar.cookie } });
+    const usernames = userListResponseSchema.parse(listed.json()).data.items.map((user) => user.username);
+    expect(usernames.sort()).toEqual(["luli", "scribe"]);
+
+    const patched = await app.inject({
+      method: "PATCH",
+      url: path(apiRoutes.adminUser, { userId: created.id }),
+      headers: { cookie: jar.cookie },
+      payload: { displayName: "誊写员·改", role: "reader", status: "suspended" }
+    });
+    expect(patched.statusCode, patched.body).toBe(200);
+    const user = userResponseSchema.parse(patched.json()).data;
+    expect([user.displayName, user.role, user.status]).toEqual(["誊写员·改", "reader", "suspended"]);
+
+    const missing = await app.inject({
+      method: "PATCH",
+      url: path(apiRoutes.adminUser, { userId: "00000000-0000-4000-8000-000000000000" }),
+      headers: { cookie: jar.cookie },
+      payload: { status: "active" }
+    });
+    expect(missing.statusCode).toBe(404);
   });
 });
 

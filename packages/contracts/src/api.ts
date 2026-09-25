@@ -327,6 +327,8 @@ export const sessionListResponseSchema = envelope(paginated(accountSessionSchema
 
 export const logoutResponseSchema = envelope(z.object({ signedOut: z.literal(true) }));
 
+export const userListResponseSchema = envelope(paginated(accountUserSchema));
+
 export const passwordChangeResponseSchema = envelope(z.object({ updated: z.literal(true) }));
 
 /* ------------------------------------------------------------------ */
@@ -360,7 +362,9 @@ export const apiRoutes = {
   authProfile: `${apiPrefix}/auth/profile`,
   authPassword: `${apiPrefix}/auth/password`,
   authSessions: `${apiPrefix}/auth/sessions`,
-  authSession: `${apiPrefix}/auth/sessions/:sessionId`
+  authSession: `${apiPrefix}/auth/sessions/:sessionId`,
+  adminUsers: `${apiPrefix}/auth/users`,
+  adminUser: `${apiPrefix}/auth/users/:userId`
 } as const;
 
 export type ApiRoutes = typeof apiRoutes;

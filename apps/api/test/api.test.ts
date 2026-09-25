@@ -413,7 +413,7 @@ describe("local accounts", () => {
     expect(setCookie).toMatch(/samesite=lax/i);
   });
 
-  it("refuses a second setup", async () => {
+  it("refuses a second setup, so a client must route to sign-in instead of retrying", async () => {
     await setupOwner();
     const again = await app.inject({
       method: "POST",
@@ -423,6 +423,15 @@ describe("local accounts", () => {
 
     expect(again.statusCode).toBe(403);
     expect(apiErrorSchema.parse(again.json()).error.code).toBe("REGISTRATION_DISABLED");
+
+    // The owner created above can still sign in - that is the recovery path a
+    // client takes when setup answered with `session: null`.
+    const signIn = await app.inject({
+      method: "POST",
+      url: apiRoutes.authLogin,
+      payload: { username: owner.username, password: owner.password }
+    });
+    expect(signIn.statusCode, signIn.body).toBe(200);
   });
 
   it("signs in with the username and rejects wrong credentials", async () => {

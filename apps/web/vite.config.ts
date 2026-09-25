@@ -3,6 +3,10 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // DEV DEMO ONLY (not committed to the branch): the API sends no CORS headers,
+  // so the dev server proxies /api. The frontend's own launcher branch adds this
+  // properly; docs/INTEGRATION.md asks for it.
+  server: { proxy: { "/api": { target: "http://127.0.0.1:30017", changeOrigin: false } } },
   plugins: [react(), tailwindcss()],
   server: {
     // 本地优先架构的联调代理：浏览器只跟 5173 同源通信，/api 转发到本机 API。

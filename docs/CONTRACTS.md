@@ -56,7 +56,7 @@ revoke sessions.
 | Method | Path | Body / query | Success |
 | --- | --- | --- | --- |
 | GET | `/api/auth/setup-status` | – | 200 `{ data: { needsSetup } }` |
-| POST | `/api/auth/setup` | `{ displayName, username, password, email? }` | 201 `{ data: { session } }`, or 403 `REGISTRATION_DISABLED` when an owner exists |
+| POST | `/api/auth/setup` | `{ displayName, username, password, email? }` | 201 with a session, 201 with `session: null`, or 403 `REGISTRATION_DISABLED` when an owner exists |
 | POST | `/api/auth/login` | `{ username, password }` | 200 `{ data: { session } }` |
 | POST | `/api/auth/logout` | – | 200 `{ data: { signedOut: true } }` (idempotent) |
 | GET | `/api/auth/me` | – | 200 `{ data: AccountUser }` |
@@ -79,7 +79,12 @@ Behaviour worth knowing:
   under the reserved `.invalid` domain; the API reports `email: null` for those
   and never exposes the placeholder.
 - **Setup closes after the first account.** `POST /api/auth/setup` answers 403
-  once any account exists.
+  once any account exists, so a client that sees 403 must route to sign-in, not
+  retry. It answers **201 in both success shapes**: with a session when the owner
+  is also signed in, and with `session: null` on the rare occasion where the
+  account was created but the session could not be opened - in that case the
+  account exists and the client signs in with the credentials it just sent.
+  Status 200 is not produced by this route.
 - **Sign-in is rate limited** in this API (10 attempts per address+username per
   minute, 429 `RATE_LIMITED`), because Better Auth's limiter only guards its own
   HTTP handler, which this API does not mount.

@@ -142,11 +142,19 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
 
     const cookies = forwardCookies(created.headers, reply);
     const session = await readSessionWith(deps.auth, request, cookieHeaderFrom(cookies));
+
+    // The account exists from this point on, so the answer is always 201: the
+    // request succeeded at what it does. If the session could not be read back
+    // (rare: the write succeeded but the sign-in did not), the payload says so
+    // with `session: null`, which the contract allows, and the client signs in
+    // with the credentials it just submitted. Retrying setup is refused by
+    // design, so an undocumented status here would leave the client guessing.
+    reply.code(201);
     if (session === null) {
+      request.log.warn({ username: body.username }, "setup created the account but could not open a session");
       return { data: { session: null } };
     }
     touchLastLogin(deps.appDb, session.userId);
-    reply.code(201);
     return { data: { session: { user: toAccountUser(session.user), sessionId: session.sessionId } } };
   });
 

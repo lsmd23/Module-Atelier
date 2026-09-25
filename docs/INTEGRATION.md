@@ -1,20 +1,22 @@
 # Integration
 
-## Status after BE-001
+## Status after BE-002 phase 1 and FE-001
 
 Route-level API contracts now exist and are listed in `docs/CONTRACTS.md`;
-`packages/contracts` 0.2.0 adds them additively (`src/api.ts`). The M0 API is
-implemented and tested against real PostgreSQL — see `docs/BACKEND.md` to run it.
+`packages/contracts` is at 0.4.0. Local account/session routes are implemented
+and tested against real PostgreSQL; project ownership and role enforcement are
+still BE-002 phase 2 work. See `docs/BACKEND.md` to run the API.
 
 Both sides must import `@module-atelier/contracts`; they must not duplicate
 PatchSet or revision types.
 
 ## Frontend
 
-Frontend can start FE-001 against the frozen M0 routes. What exists:
+The frontend workbench exists, but its next integration step is to use the live
+0.4.0 local-account contract end to end. What exists:
 
 - `/api/health` returns `{ status, database, contractVersion }`, so the shell can
-  assert it is talking to contract 0.2.0.
+  assert it is talking to contract 0.4.0.
 - Project, document, entity and relation CRUD plus revision history.
 - Uniform envelopes, structured errors, `x-request-id` on every response.
 
@@ -27,10 +29,9 @@ What the frontend must provide or know:
   `CONFLICT` using `error.details.conflict` (`expectedRevision`,
   `actualRevision`) for merge/reload UX.
 - **Authentication is live, and it is local** (`/api/auth/*`, contract 0.4.0).
-  The frontend's `AuthScreen`/`AccountDialog` still speak to a mock whose shape
-  no longer matches: sign-in is by `username`, there is no verification screen,
-  and the first run must call `GET /api/auth/setup-status` and then
-  `POST /api/auth/setup` instead of registering. Sessions are httpOnly cookies,
+  The launcher has the correct setup/login boundary, but the account and
+  authoring flows still need a full live API smoke path. Sign-in is by
+  `username`; there is no verification screen. Sessions are httpOnly cookies,
   so requests send credentials and a 401 must clear local auth state.
 - **Errors the auth UI should branch on**: `INVALID_CREDENTIALS`,
   `WEAK_PASSWORD`, `REGISTRATION_DISABLED`, `RATE_LIMITED`.

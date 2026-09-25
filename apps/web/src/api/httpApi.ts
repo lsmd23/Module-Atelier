@@ -22,13 +22,13 @@ import type {
 } from "./types";
 
 /**
- * 真实 HTTP 实现（对接 BE-001 冻结的 M0 路由）。
+ * 真实 HTTP 实现（对接当前 0.4.0 本地账户与 M0 内容路由）。
  *
  * 覆盖：projects / documents / entities。
  * 未覆盖（contracts 0.2.0 尚无路由，M3/M4 才会冻结）：suggestions / patchsets /
  * questions / preview —— 调用会抛 ROUTE_NOT_IN_CONTRACT，不要假装它们存在。
  *
- * 启用方式：VITE_API_MODE=http（默认 mock）。尚未对运行中的后端联调过。
+ * 启用方式：VITE_API_MODE=http（默认 mock）。
  */
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -53,8 +53,13 @@ async function request<T>(
   try {
     const init: RequestInit =
       body === undefined
-        ? { method }
-        : { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
+        ? { method, credentials: "include" }
+        : {
+            method,
+            credentials: "include",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body)
+          };
     res = await fetch(`${BASE}${path}`, init);
   } catch {
     throw new Error("OFFLINE");
@@ -84,9 +89,15 @@ export const httpApi: AtelierApi = {
   },
 
   async setup(req: SetupRequest) {
-    const result = await request("POST", apiRoutes.authSetup, req, (d) =>
-      authResultResponseSchema.parse({ data: d }).data
-    );
+    let result: ReturnType<typeof authResultResponseSchema.parse>["data"];
+    try {
+      result = await request("POST", apiRoutes.authSetup, req, (d) =>
+        authResultResponseSchema.parse({ data: d }).data
+      );
+    } catch (error) {
+      if (error instanceof ApiRequestError) throw new Error(error.code);
+      throw error;
+    }
     // 后端在 signUp 后会话读取失败时返回 200 + session:null（已建账户、未建会话），
     // 与 403 REGISTRATION_DISABLED 区分开：前端应引导用户直接登录。
     if (!result.session) throw new Error("SETUP_NO_SESSION");
@@ -94,9 +105,15 @@ export const httpApi: AtelierApi = {
   },
 
   async login(username: string, password: string) {
-    const result = await request("POST", apiRoutes.authLogin, { username, password }, (d) =>
-      authResultResponseSchema.parse({ data: d }).data
-    );
+    let result: ReturnType<typeof authResultResponseSchema.parse>["data"];
+    try {
+      result = await request("POST", apiRoutes.authLogin, { username, password }, (d) =>
+        authResultResponseSchema.parse({ data: d }).data
+      );
+    } catch (error) {
+      if (error instanceof ApiRequestError) throw new Error(error.code);
+      throw error;
+    }
     if (!result.session) throw new Error("INVALID_CREDENTIALS");
     return result.session;
   },

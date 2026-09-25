@@ -87,7 +87,9 @@ export const httpApi: AtelierApi = {
     const result = await request("POST", apiRoutes.authSetup, req, (d) =>
       authResultResponseSchema.parse({ data: d }).data
     );
-    if (!result.session) throw new Error("REGISTRATION_DISABLED");
+    // 后端在 signUp 后会话读取失败时返回 200 + session:null（已建账户、未建会话），
+    // 与 403 REGISTRATION_DISABLED 区分开：前端应引导用户直接登录。
+    if (!result.session) throw new Error("SETUP_NO_SESSION");
     return result.session;
   },
 

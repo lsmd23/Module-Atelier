@@ -95,7 +95,7 @@ function Field({
 const inputCls =
   "w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm outline-none focus:border-brass placeholder:text-ink-faint";
 
-function LoginView() {
+function LoginView({ notice }: { notice?: string | null }) {
   const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -123,6 +123,9 @@ function LoginView() {
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
       <h2 className="text-xl font-semibold">登录</h2>
+      {notice && (
+        <p className="rounded-md border border-forest/40 bg-forest/10 px-3 py-2 text-xs text-forest">{notice}</p>
+      )}
       <p className="text-xs text-ink-faint">本机账户。所有数据保存在这台设备上。</p>
       <Field label="用户名" error={errors.username}>
         <input
@@ -164,7 +167,7 @@ function LoginView() {
   );
 }
 
-function SetupView() {
+function SetupView({ onCreated }: { onCreated: () => void }) {
   const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -186,6 +189,11 @@ function SetupView() {
       const session = await api.setup({ displayName: displayName.trim(), username: username.trim(), password });
       setAuthenticated(session.user);
     } catch (err) {
+      if (err instanceof Error && err.message === "SETUP_NO_SESSION") {
+        // 账户已建、会话未建立：引导去登录
+        onCreated();
+        return;
+      }
       setFormError(
         err instanceof Error && err.message === "REGISTRATION_DISABLED"
           ? "管理者账户已存在，请直接登录"
@@ -249,14 +257,25 @@ function SetupView() {
 
 export function AuthScreen() {
   const status = useAuthStore((s) => s.status);
+  const setStatus = useAuthStore((s) => s.setStatus);
   const theme = useUiStore((s) => s.theme);
+  const [notice, setNotice] = useState<string | null>(null);
 
   return (
     <div data-theme={theme} className="flex min-h-full items-center justify-center bg-parchment p-4 text-ink">
       <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-hairline shadow-2xl md:flex-row">
         <BrandPanel />
         <div className="flex-1 bg-paper p-8">
-          {status === "needsSetup" ? <SetupView /> : <LoginView />}
+          {status === "needsSetup" ? (
+            <SetupView
+              onCreated={() => {
+                setNotice("账户已创建，请直接登录");
+                setStatus("guest");
+              }}
+            />
+          ) : (
+            <LoginView notice={notice} />
+          )}
         </div>
       </div>
     </div>

@@ -113,6 +113,15 @@ export function Launcher() {
         <span className="text-sm font-semibold tracking-wide text-oxblood">❦ Module Atelier</span>
         <span className="text-xs text-ink-faint">本机工作室</span>
         <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => useUiStore.getState().setSettingsOpen(true)}
+            className="rounded-md border border-hairline bg-paper px-2 py-1 text-xs text-ink-soft hover:border-brass"
+            aria-label="设置"
+            title="设置（外观 / 编辑器 / AI 行为 / 本地数据 / 关于）"
+          >
+            ⚙ 设置
+          </button>
           <AccountPopover />
         </div>
       </header>

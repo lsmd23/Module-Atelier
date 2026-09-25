@@ -155,6 +155,15 @@ export function TopBar({
     <header className="flex h-12 items-center gap-3 border-b border-hairline bg-parchment px-3">
       <button
         type="button"
+        onClick={closeProject}
+        className="flex shrink-0 items-center gap-1 rounded-md border border-hairline bg-paper px-2 py-1 text-xs text-ink-soft hover:border-brass"
+        aria-label="返回项目库"
+        title="保存并返回项目库"
+      >
+        ‹ 项目库
+      </button>
+      <button
+        type="button"
         onClick={toggleSidebar}
         className="rounded px-1.5 py-1 text-ink-soft hover:bg-parchment-deep"
         aria-label="切换项目导航"
@@ -162,14 +171,7 @@ export function TopBar({
         ☰
       </button>
       <div className="flex min-w-0 items-baseline gap-2">
-        <button
-          type="button"
-          onClick={closeProject}
-          className="whitespace-nowrap text-sm font-semibold tracking-wide text-oxblood hover:underline"
-          title="返回项目库"
-        >
-          ❦ Module Atelier
-        </button>
+        <span className="whitespace-nowrap text-sm font-semibold tracking-wide text-oxblood">❦ Module Atelier</span>
         <span className="truncate text-sm text-ink-soft">{projectName}</span>
       </div>
 

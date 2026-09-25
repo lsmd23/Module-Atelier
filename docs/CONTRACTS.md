@@ -61,6 +61,9 @@ revoke sessions.
 | POST | `/api/auth/logout` | – | 200 `{ data: { signedOut: true } }` (idempotent) |
 | GET | `/api/auth/me` | – | 200 `{ data: AccountUser }` |
 | PATCH | `/api/auth/profile` | `{ displayName }` | 200 `{ data: AccountUser }` |
+| GET | `/api/auth/users` | `limit`, `offset` | 200 list of `AccountUser` - administrator only |
+| POST | `/api/auth/users` | `{ displayName, username, password, role? }` | 201 `{ data: AccountUser }` - administrator only |
+| PATCH | `/api/auth/users/:userId` | `{ displayName?, role?, status? }` | 200 `{ data: AccountUser }` - administrator only |
 | POST | `/api/auth/password` | `{ currentPassword, newPassword }` | 200 `{ data: { updated: true } }`, revokes other sessions and rotates the current cookie |
 | GET | `/api/auth/sessions` | `limit`, `offset` | 200 list of `AccountSession` (`current` marks the caller's session) |
 | DELETE | `/api/auth/sessions/:sessionId` | – | 200 `{ data: { id } }` |
@@ -78,6 +81,10 @@ Behaviour worth knowing:
   address on its user model, so accounts created without one store a placeholder
   under the reserved `.invalid` domain; the API reports `email: null` for those
   and never exposes the placeholder.
+- **The administrator is the first account**: the one that ran the setup. It is
+  derived from creation order rather than stored, so a local installation needs no
+  extra field, and it is the account that creates the others. Account management
+  answers 403 `FORBIDDEN` to everyone else and 401 without a session.
 - **Setup closes after the first account.** `POST /api/auth/setup` answers 403
   once any account exists, so a client that sees 403 must route to sign-in, not
   retry. It answers **201 in both success shapes**: with a session when the owner

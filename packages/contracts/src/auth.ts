@@ -76,4 +76,29 @@ export const changePasswordRequestSchema = z.object({
   newPassword: z.string().min(8).max(128)
 });
 
+/* ------------------------------------------------------------------ */
+/* local user administration (the administrator runs this on one machine) */
+/* ------------------------------------------------------------------ */
+
+export const createUserRequestSchema = z.object({
+  displayName: z.string().trim().min(1).max(50),
+  username: z.string().trim().min(3).max(24),
+  password: z.string().min(8).max(128),
+  /** What the account may do inside a project; the administrator decides. */
+  role: z.enum(accountRoles).default("collaborator")
+});
+
+export const updateUserRequestSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(50).optional(),
+    role: z.enum(accountRoles).optional(),
+    status: z.enum(accountStatuses).optional()
+  })
+  .refine(
+    (value) => value.displayName !== undefined || value.role !== undefined || value.status !== undefined,
+    { message: "at least one field is required", path: ["displayName"] }
+  );
+
+export const userParamsSchema = z.object({ userId: z.string().min(1) });
+
 export const sessionParamsSchema = z.object({ sessionId: z.string().min(1) });

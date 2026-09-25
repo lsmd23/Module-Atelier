@@ -1,11 +1,11 @@
 # Integration
 
-## Status after BE-002 phase 1 and FE-001
+## Status after BE-003 storage integration and FE-001
 
 Route-level API contracts now exist and are listed in `docs/CONTRACTS.md`;
-`packages/contracts` is at 0.4.0. Local account/session routes are implemented
-and tested against real PostgreSQL; project ownership and role enforcement are
-still BE-002 phase 2 work. See `docs/BACKEND.md` to run the API.
+`packages/contracts` is at 0.4.0. Local account/session routes and the
+local-first SQLite runtime are implemented; project ownership and role
+enforcement are still BE-002 phase 2 work. See `docs/BACKEND.md` to run the API.
 
 Both sides must import `@module-atelier/contracts`; they must not duplicate
 PatchSet or revision types.
@@ -29,10 +29,9 @@ What the frontend must provide or know:
   `CONFLICT` using `error.details.conflict` (`expectedRevision`,
   `actualRevision`) for merge/reload UX.
 - **Authentication is live, and it is local** (`/api/auth/*`, contract 0.4.0).
-  The launcher has the correct setup/login boundary, but the account and
-  authoring flows still need a full live API smoke path. Sign-in is by
-  `username`; there is no verification screen. Sessions are httpOnly cookies,
-  so requests send credentials and a 401 must clear local auth state.
+  The launcher uses the setup/login boundary. Sign-in is by `username`; there
+  is no verification screen. Sessions are httpOnly cookies, so requests send
+  credentials and a 401 must clear local auth state.
 - **Errors the auth UI should branch on**: `INVALID_CREDENTIALS`,
   `WEAK_PASSWORD`, `REGISTRATION_DISABLED`, `RATE_LIMITED`.
 - **Project routes are not role-guarded yet** (phase 2): being signed in does

@@ -12,8 +12,10 @@ Completed:
 - BE-001 backend skeleton: `packages/db` (Drizzle schema + repeatable migrations), `packages/domain` (services, revision semantics, row→contract mapping), `apps/api` (Fastify `/api` routes with `{ data }` / `{ error }` envelopes). Route contract frozen in `docs/CONTRACTS.md`; runbook in `docs/BACKEND.md`.
 - Contract 0.2.0 added route-level schemas in `packages/contracts/src/api.ts`; 0.4.0 removes the email-verification surface because accounts are local (deliberate breaking change).
 - BE-002 accounts delivered and revised: Better Auth behind our own `/api/auth/*` routes, with local accounts (first-run owner setup, username sign-in, no email verification) per contract 0.4.0; auth tables in `packages/db/src/schema-auth.ts` and rate limits enforced in the API.
+- FE-001 workbench delivered on `frontend/m0-workbench`, then reworked into a launcher/local-account flow on `frontend/launcher-chrome`; this merge integrates the launcher and real API handoff into `main`.
 
 In Progress:
+- Real Web↔API browser smoke coverage is the next integration gate; the HTTP client now sends session cookies and preserves auth error codes.
 - BE-003 (storage switch to SQLite, per-project databases, data directory) is next, then BE-002 phase 2 (first-run owner setup, local users, ownership and role enforcement).
 - Publishing technical spike (PUB-001) completed locally; shared PublishSnapshot/Module IR contract remains under review.
 

@@ -17,3 +17,4 @@ output/
 
 # Local agent instructions (session-specific, not project source)
 AGENTS.md
+.zcode
